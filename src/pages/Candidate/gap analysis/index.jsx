@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Box, Typography, Chip, CircularProgress, Button, Skeleton } from "@mui/material";
+import { Box, Typography, CircularProgress, Button, Skeleton } from "@mui/material";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
@@ -70,7 +70,7 @@ const subFunctionLabel = (value) =>
 const getTier = (score) => {
   if (score >= 0.3) {
     return {
-      label: "Confirmed",
+      label: "Strong",
       color: PRIMARY_DARK,
       ring: PRIMARY,
       bg: PRIMARY_TINT,
@@ -80,7 +80,7 @@ const getTier = (score) => {
   }
   if (score > 0) {
     return {
-      label: "Possible",
+      label: "Developing",
       color: WARN,
       ring: WARN,
       bg: WARN_TINT,
@@ -89,7 +89,7 @@ const getTier = (score) => {
     };
   }
   return {
-    label: "Not evidenced",
+    label: "Room to grow",
     color: TEXT_MUTED,
     ring: MUTED_RING,
     bg: MUTED_TINT,
@@ -249,25 +249,6 @@ const SkillCard = ({ skillKey, score, notes }) => {
             {humanizeKey(skillKey)}
           </Typography>
 
-          <Chip
-            label={tier.label}
-            size="small"
-            sx={{
-              height: 20,
-              fontSize: { xs: 8.5, sm: 10 },
-              fontWeight: 700,
-
-              color: tier.color,
-              bgcolor: tier.bg,
-              border: `1px solid ${tier.border}`,
-
-              flexShrink: 0,
-
-              "& .MuiChip-label": {
-                px: { xs: 0.7, sm: 1 },
-              },
-            }}
-          />
         </Box>
 
         {/* Notes */}
@@ -277,31 +258,24 @@ const SkillCard = ({ skillKey, score, notes }) => {
   );
 };
 
-/* ── Section wrapper ─────────────────────────────────────────────────────── */
-const Section = ({ title, count, children }) => (
-  <Box sx={{ mb: 3 }}>
-    <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 1.5 }}>
-      <Typography sx={{ fontFamily: FONT_DISPLAY, fontSize: 17, fontWeight: 700, color: INK }}>
-        {title}
-      </Typography>
-      <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED }}>({count})</Typography>
-    </Box>
-    <Box
-      sx={{
-        display: "grid",
-        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "1fr 1fr 1fr" },
-        gap: 1.5,
-      }}
-    >
-      {children}
-    </Box>
+/* ── Skills grid — one list, no section headings ─────────────────────── */
+const SkillsGrid = ({ children }) => (
+  <Box
+    sx={{
+      display: "grid",
+      gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "1fr 1fr 1fr" },
+      gap: 1.5,
+    }}
+  >
+    {children}
   </Box>
 );
 
 const CandidateGapAnalysis = () => {
   const { data, isLoading, isFetching, isError, error, refetch } = useGetCandidateSkillsQuery();
 
-  const { confirmed, possible, none, subFunction } = useMemo(() => {
+  // All skills in one list, strongest first
+  const { skills, subFunction } = useMemo(() => {
     const skills = data?.data?.skills || {};
     const entries = Object.entries(skills).map(([key, val]) => ({
       key,
@@ -311,9 +285,7 @@ const CandidateGapAnalysis = () => {
     entries.sort((a, b) => b.score - a.score);
 
     return {
-      confirmed: entries.filter((e) => e.score >= 0.3),
-      possible: entries.filter((e) => e.score > 0 && e.score < 0.3),
-      none: entries.filter((e) => e.score === 0),
+      skills: entries,
       subFunction: data?.data?.sub_function,
     };
   }, [data]);
@@ -415,39 +387,19 @@ const CandidateGapAnalysis = () => {
       )}
 
       {/* ── Empty state ────────────────────────────────────────────────── */}
-      {!isLoading && !isError && confirmed.length + possible.length + none.length === 0 && (
+      {!isLoading && !isError && skills.length === 0 && (
         <Typography sx={{ fontSize: 13.5, color: TEXT_MUTED }}>
           No skill analysis available yet.
         </Typography>
       )}
 
-      {/* ── Content ────────────────────────────────────────────────────── */}
-      {!isLoading && !isError && (
-        <>
-          {confirmed.length > 0 && (
-            <Section title="Confirmed Skills" count={confirmed.length}>
-              {confirmed.map((s) => (
-                <SkillCard key={s.key} skillKey={s.key} score={s.score} notes={s.notes} />
-              ))}
-            </Section>
-          )}
-
-          {possible.length > 0 && (
-            <Section title="Possible Matches" count={possible.length}>
-              {possible.map((s) => (
-                <SkillCard key={s.key} skillKey={s.key} score={s.score} notes={s.notes} />
-              ))}
-            </Section>
-          )}
-
-          {none.length > 0 && (
-            <Section title="Skill Gaps To Explore" count={none.length}>
-              {none.map((s) => (
-                <SkillCard key={s.key} skillKey={s.key} score={s.score} notes={s.notes} />
-              ))}
-            </Section>
-          )}
-        </>
+      {/* ── Content — one grid, no headings ─────────────────────────────── */}
+      {!isLoading && !isError && skills.length > 0 && (
+        <SkillsGrid>
+          {skills.map((s) => (
+            <SkillCard key={s.key} skillKey={s.key} score={s.score} notes={s.notes} />
+          ))}
+        </SkillsGrid>
       )}
     </Box>
   );

@@ -19,7 +19,7 @@ import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
 import BoltOutlinedIcon from "@mui/icons-material/BoltOutlined";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
-import ri8fitLogo from "../../assets/ri8fit-logo.svg";
+import ri8fitLogo from "../../assets/Ri8fit_logo.png";
 import Ri8fit_Logo from "../../assets/Ri8fit_Logo.png"
 /* ---------- Design tokens ---------- */
 const GREEN = "#2B6F71";

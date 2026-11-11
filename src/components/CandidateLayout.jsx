@@ -13,6 +13,7 @@ import {
   Breadcrumbs,
   Menu, MenuItem,
   useMediaQuery,
+  useTheme,
   Badge,
 } from "@mui/material";
 import { Outlet, useLocation, useNavigate, Link as RouterLink } from "react-router-dom";
@@ -25,7 +26,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import HomeIcon from "@mui/icons-material/Home";
 import { palette, fonts } from "../theme/candidateTokens";
-import logoDark from "../assets/ri8fit-logo.svg";
+import logoDark from "../assets/Ri8fit_Logo.png";
 import {
   candidateClearLocalStorage,
   getItem,
@@ -38,7 +39,8 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import { Assessment, BusinessCenter, PeopleOutlineOutlined, Person, Person2, Person2Outlined } from "@mui/icons-material";
 import AnalyticsOutlinedIcon from "@mui/icons-material/AnalyticsOutlined";
 import { useSelector } from "react-redux";
-
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 /* ── Candidate display name ───────────────────────────────────────────────
    The name can sit in different places depending on how the user got here
    (login response, register / resume data, old localStorage) — use the
@@ -68,11 +70,32 @@ const resolveCandidateName = (...sources) => {
   const email = sources.find((s) => s?.email)?.email;
   return email ? email.split("@")[0] : "";
 };
+const getInitials = (name = "") =>
+  name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("") || "U";
 
+const avatarSx = (size) => ({
+  width: size,
+  height: size,
+  fontSize: size * 0.4,
+  fontWeight: 700,
+  letterSpacing: 0.3,
+  color: "#fff",
+  background: `linear-gradient(135deg, ${palette.teal} 0%, ${palette.tealDeep || "#174f52"} 100%)`,
+  boxShadow: "0 2px 6px rgba(31, 107, 101, 0.25)",
+});
 
 const SIDEBAR_WIDTH_OPEN = 220;
-const SIDEBAR_WIDTH_CLOSED = 76;
+const SIDEBAR_WIDTH_CLOSED = 76; // desktop, collapsed with the hamburger
+// Phones / tablets: icon-only rail, never the full menu
+const RAIL_WIDTH = { xs: 60, sm: 72 };
 const TOPBAR_HEIGHT = 64;
+const TOPBAR_HEIGHT_XS = 56;
 
 const MAIN_ITEMS = [
   { label: "Profile", path: "/for-candidate/profile", icon: <Person />, disabled: false },
@@ -83,7 +106,7 @@ const MAIN_ITEMS = [
 ];
 
 const SETTINGS_ITEMS = [
-  { label: "Settings", path: "/acc/settings", icon: <SettingsIcon />, disabled: true },
+  { label: "Settings", path: "/for-candidate/settings", icon: <SettingsIcon />, disabled: false },
 ];
 
 // Simple path -> breadcrumb label mapping; extend as more routes are added
@@ -93,17 +116,18 @@ const BREADCRUMB_LABELS = {
   "/acc/requisitions": "Requisitions",
   "/acc/interviews": "Interviews",
   "/acc/settings": "Settings",
+  "/for-candidate/settings": "Settings",
 };
 
 function CandidateLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isMobile = useMediaQuery((theme) =>
-    theme.breakpoints.down("sm")
-  );
-  // Sidebar expand/collapse state — driven ONLY by the hamburger icon.
+  // Phones AND tablets (< 900px, incl. iPad portrait): icons only, names on hover.
+  const theme = useTheme();
+  const isCompact = useMediaQuery(theme.breakpoints.down("md"));
+  // Desktop: expand/collapse with the hamburger icon.
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const effectiveSidebarOpen = isMobile ? false : sidebarOpen;
+  const effectiveSidebarOpen = isCompact ? false : sidebarOpen;
 
   const [anchorEl, setAnchorEl] = useState(null);
   const menuOpen = Boolean(anchorEl);
@@ -173,17 +197,31 @@ function CandidateLayout() {
   {
     label: "Interviews",
     path: "/for-candidate/interviews",
-    icon: <Badge />,
+    icon: <AssignmentIndIcon />
   },
+  {
+  label: "Settings",
+  path: "/for-candidate/settings",
+  icon: <SettingsIcon />,
+},
 ];
-  const currentItem = navItems.find((item) => {
-  if (item.path === "/") return location.pathname === "/";
-  
-  return (
-    location.pathname === item.path ||
-    location.pathname.startsWith(`${item.path}/`)
+   const currentItem = navItems.find(
+    (item) =>
+      location.pathname === item.path ||
+      location.pathname.startsWith(`${item.path}/`)
   );
-});
+
+  // Sub-pages get a second crumb, e.g. /for-candidate/requisitions/123 → "Jobs › Job details"
+  const SUB_PAGE_LABELS = {
+    "/for-candidate/requisitions": "Job details",
+  };
+  const isSubPage = !!currentItem && location.pathname !== currentItem.path;
+  const subPageLabel = isSubPage
+    ? SUB_PAGE_LABELS[currentItem.path] || "Details"
+    : null;
+  const sectionIcon = currentItem
+    ? React.cloneElement(currentItem.icon, { sx: { fontSize: 16 } })
+    : null;
 
 const currentLabel = currentItem?.label || "Page";
 
@@ -229,7 +267,7 @@ const currentLabel = currentItem?.label || "Page";
             ? "flex-start"
             : "center",
 
-          px: effectiveSidebarOpen ? 1.5 : 1,
+          px: effectiveSidebarOpen ? 1.5 : 0,
 
           color: active ? palette.teal : palette.muted,
 
@@ -242,8 +280,8 @@ const currentLabel = currentItem?.label || "Page";
             },
           },
 
-          "&:hover": {
-            backgroundColor: palette.tealSoft,
+          "@media (hover: hover)": {
+            "&:hover": { backgroundColor: palette.tealSoft },
           },
 
           "&.Mui-disabled": {
@@ -290,8 +328,11 @@ const currentLabel = currentItem?.label || "Page";
       return (
         <Tooltip
           key={item.path}
-          title="Coming soon"
+          title={effectiveSidebarOpen ? "Coming soon" : `${item.label} · Coming soon`}
           placement="right"
+          arrow
+          enterTouchDelay={0}
+          leaveTouchDelay={1500}
         >
           <span style={{ display: "block" }}>
             {button}
@@ -306,6 +347,8 @@ const currentLabel = currentItem?.label || "Page";
           key={item.path}
           title={item.label}
           placement="right"
+          arrow
+          enterDelay={150}
         >
           <span style={{ display: "block" }}>
             {button}
@@ -350,16 +393,15 @@ const currentLabel = currentItem?.label || "Page";
             minWidth: 0,
           }}
         >
+          {/* Hamburger only on desktop — phones/tablets always use the icon rail */}
           <IconButton
-            onClick={() => {
-              if (!isMobile) {
-                setSidebarOpen((prev) => !prev);
-              }
-            }}
+            onClick={() => setSidebarOpen((prev) => !prev)}
             size="small"
+            aria-label={sidebarOpen ? "Collapse menu" : "Expand menu"}
             sx={{
+              display: { xs: "none", md: "inline-flex" },
               color: palette.teal,
-              p: { xs: 0.5, sm: 1 },
+              p: 1,
               "&:hover": {
                 backgroundColor: palette.tealSoft,
               },
@@ -383,7 +425,7 @@ const currentLabel = currentItem?.label || "Page";
               objectFit: "contain",
               cursor: "pointer",
             }}
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/for-candidate/profile")}
           />
           {/* </Typography> */}
 
@@ -397,60 +439,64 @@ const currentLabel = currentItem?.label || "Page";
             }}
           />
 
-          <Breadcrumbs
-            separator={
-              <ChevronRightIcon
-                sx={{
-                  fontSize: { xs: 13, sm: 16 },
-                  color: palette.muted,
-                }}
-              />
-            }
-            sx={{
-              minWidth: 0,
-              "& .MuiBreadcrumbs-ol": {
-                alignItems: "center",
-                flexWrap: "nowrap",
-              },
-            }}
-          >
-            <Box
-              component={RouterLink}
-              to="/"
+                    {currentItem && (
+            <Breadcrumbs
+              separator={<ChevronRightIcon sx={{ fontSize: { xs: 13, sm: 16 }, color: palette.muted }} />}
               sx={{
-                display: { xs: "none", sm: "flex" },
-                alignItems: "center",
-                gap: 0.5,
-                px: 1,
-                py: 0.5,
-                borderRadius: "16px",
-                backgroundColor: palette.tealSoft,
-                color: palette.muted,
-                textDecoration: "none",
-                fontSize: 13.5,
+                minWidth: 0,
+                "& .MuiBreadcrumbs-ol": { alignItems: "center", flexWrap: "nowrap" },
               }}
             >
-              <HomeIcon sx={{ fontSize: 16 }} />
-              Home
-            </Box>
-            {currentLabel && (
-              <Typography
+              {/* Section — a link back to the list only when on a sub-page */}
+              <Box
+                component={isSubPage ? RouterLink : "span"}
+                to={isSubPage ? currentItem.path : undefined}
+                aria-current={isSubPage ? undefined : "page"}
                 sx={{
-                  fontSize: { xs: 12, sm: 13.5 },
-                  fontWeight: 700,
-                  color: palette.ink,
-
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.6,
+                  px: 1.1,
+                  py: 0.5,
+                  borderRadius: "16px",
+                  textDecoration: "none",
                   whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-
-                  maxWidth: { xs: 80, sm: "none" },
+                  fontSize: { xs: 12.5, sm: 13.5 },
+                  fontWeight: isSubPage ? 600 : 700,
+                  color: isSubPage ? palette.muted : palette.ink,
+                  bgcolor: isSubPage ? "transparent" : palette.tealSoft,
+                  "& svg": { color: palette.teal },
+                  "@media (hover: hover)": isSubPage
+                    ? { "&:hover": { bgcolor: palette.tealSoft, color: palette.teal } }
+                    : {},
                 }}
               >
-                {currentLabel}
-              </Typography>
-            )}
-          </Breadcrumbs>
+                {sectionIcon}
+                {currentItem.label}
+              </Box>
+
+              {isSubPage && (
+                <Typography
+                  aria-current="page"
+                  sx={{
+                    px: 1.1,
+                    py: 0.5,
+                    borderRadius: "16px",
+                    bgcolor: palette.tealSoft,
+                    fontSize: { xs: 12.5, sm: 13.5 },
+                    fontWeight: 700,
+                    color: palette.ink,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: { xs: 110, sm: "none" },
+                  }}
+                >
+                  {subPageLabel}
+                </Typography>
+              )}
+            </Breadcrumbs>
+          )}
         </Box>
 
         {/* Right: user info */}
@@ -474,18 +520,19 @@ const currentLabel = currentItem?.label || "Page";
             </Typography>
           </Box>
           <Avatar
-            sx={{
-              width: 34,
-              height: 34,
-              bgcolor: palette.tealSoft,
-              color: palette.teal,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-            onClick={handleAvatarClick}
-          >
-            <Person2 />
-          </Avatar>
+  sx={{
+    ...avatarSx(36),
+    cursor: "pointer",
+    transition: "transform .15s ease, box-shadow .15s ease",
+    "@media (hover: hover)": {
+      "&:hover": { transform: "scale(1.05)", boxShadow: "0 4px 12px rgba(31, 107, 101, 0.35)" },
+    },
+  }}
+  onClick={handleAvatarClick}
+  aria-label="Open account menu"
+>
+  {getInitials(displayName)}
+</Avatar>
           <Menu
             anchorEl={anchorEl}
             open={menuOpen}
@@ -507,34 +554,66 @@ const currentLabel = currentItem?.label || "Page";
               },
             }}
           >
-            {/* Who is logged in */}
-            <Box sx={{ px: 2, py: 1.25, display: "flex", alignItems: "center", gap: 1.25 }}>
-              <Avatar sx={{ width: 34, height: 34, bgcolor: palette.tealSoft, color: palette.teal }}>
-                <Person2 fontSize="small" />
-              </Avatar>
+                        {/* Who is logged in */}
+            <Box sx={{ px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Avatar sx={avatarSx(40)}>{getInitials(displayName)}</Avatar>
               <Box sx={{ minWidth: 0 }}>
                 <Typography
                   noWrap
-                  sx={{ fontSize: 13.5, fontWeight: 700, color: palette.ink, textTransform: "capitalize" }}
+                  sx={{ fontSize: 14, fontWeight: 700, color: palette.ink, textTransform: "capitalize" }}
                 >
                   {displayName}
                 </Typography>
                 {displayEmail && (
-                  <Typography noWrap sx={{ fontSize: 11.5, color: palette.muted }}>
+                  <Typography noWrap sx={{ fontSize: 12, color: palette.muted }}>
                     {displayEmail}
                   </Typography>
                 )}
               </Box>
             </Box>
-            <Divider sx={{ borderColor: palette.line }} />
+            <Divider sx={{ borderColor: palette.line, my: 0.5 }} />
+
+            <MenuItem
+              onClick={() => {
+                handleClose();
+                navigate("/for-candidate/settings");
+              }}
+              sx={{
+                mx: 1,
+                my: 0.25,
+                borderRadius: "8px",
+                fontSize: 14,
+                fontWeight: 600,
+                color: palette.teal,
+                "& .MuiListItemIcon-root": { color: palette.teal, minWidth: 34 },
+                "&:hover": { bgcolor: palette.tealSoft },
+              }}
+            >
+              <ListItemIcon>
+                <SettingsOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              Settings
+            </MenuItem>
+
             <MenuItem
               onClick={() => {
                 handleClose();
                 handleLogout();
               }}
+              sx={{
+                mx: 1,
+                my: 0.25,
+                mb: 1,
+                borderRadius: "8px",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#DC2626",
+                "& .MuiListItemIcon-root": { color: "#DC2626", minWidth: 34 },
+                "&:hover": { bgcolor: "#FEF2F2" },
+              }}
             >
               <ListItemIcon>
-                <LogoutIcon fontSize="small" />
+                <LogoutRoundedIcon fontSize="small" />
               </ListItemIcon>
               Logout
             </MenuItem>
@@ -547,15 +626,19 @@ const currentLabel = currentItem?.label || "Page";
       <Box sx={{ display: "flex" }}>
         <Box
           sx={{
-            width: sidebarWidth,
+            width: isCompact ? RAIL_WIDTH : sidebarWidth,
             flexShrink: 0,
             display: "flex",
             flexDirection: "column",
             borderRight: `1px solid ${palette.line}`,
             backgroundColor: palette.paper,
-            height: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
+            // matches the top bar: 56px on phones, 64px from tablet up
+            height: {
+              xs: `calc(100vh - ${TOPBAR_HEIGHT_XS}px)`,
+              sm: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
+            },
             position: "sticky",
-            top: TOPBAR_HEIGHT,
+            top: { xs: TOPBAR_HEIGHT_XS, sm: TOPBAR_HEIGHT },
             transition: (theme) =>
               theme.transitions.create("width", {
                 easing: theme.transitions.easing.sharp,
@@ -566,15 +649,15 @@ const currentLabel = currentItem?.label || "Page";
           }}
         >
           {/* MAIN section */}
-          <Box sx={{ px: effectiveSidebarOpen ? 1.5 : 1, pt: 2.5 }}>
+          <Box sx={{ px: effectiveSidebarOpen ? 1.5 : { xs: 0.75, sm: 1 }, pt: { xs: 1.5, sm: 2.5 } }}>
             {renderSectionLabel("Main")}
             <List sx={{ p: 0 }}>{MAIN_ITEMS.map(renderNavItem)}</List>
           </Box>
 
-          <Divider sx={{ borderColor: palette.line, my: 2 }} />
+          <Divider sx={{ borderColor: palette.line, my: { xs: 1.25, sm: 2 } }} />
 
           {/* SETTINGS section */}
-          <Box sx={{ px: effectiveSidebarOpen ? 1.5 : 1 }}>
+          <Box sx={{ px: effectiveSidebarOpen ? 1.5 : { xs: 0.75, sm: 1 } }}>
             {renderSectionLabel("Settings")}
             <List sx={{ p: 0 }}>{SETTINGS_ITEMS.map(renderNavItem)}</List>
           </Box>

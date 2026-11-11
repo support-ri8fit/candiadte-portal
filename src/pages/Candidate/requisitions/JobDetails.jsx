@@ -204,7 +204,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             minHeight: 0,
           }}
         >
-          Back to Requisitions
+          Back to Job Applications 
         </Button>
       </Box>
 
@@ -241,7 +241,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
                   letterSpacing: 1.4,
                 }}
               >
-                Requisition
+                
               </Typography>
               <Typography
                 sx={{

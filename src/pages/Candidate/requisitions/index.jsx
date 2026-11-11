@@ -350,7 +350,7 @@ const CandidateRequisitions = () => {
       {isError && !isLoading && (
         <Box sx={{ border: `1px solid ${WARN_TINT}`, background: WARN_TINT, borderRadius: "10px", p: 2 }}>
           <Typography sx={{ fontSize: 13.5, color: WARN, fontWeight: 600 }}>
-            Couldn't load matched requisitions.
+            Couldn't load matched jobs.
           </Typography>
           <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED, mt: 0.5 }}>
             {error?.data?.message || error?.error || "Please try again."}
@@ -364,7 +364,7 @@ const CandidateRequisitions = () => {
       {/* ── Empty state ────────────────────────────────────────────────── */}
       {!isLoading && !isError && jobs.length === 0 && (
         <Typography sx={{ fontSize: 13.5, color: TEXT_MUTED }}>
-          No open requisitions found for {country} right now.
+          No open Jobs found for {country} right now.
         </Typography>
       )}
 

@@ -35,6 +35,21 @@ const INK = "#1F2937";
 
 const ACCEPTED = ".pdf,.png,.jpg,.jpeg";
 
+/* Device helpers — finger input gets 44px tap targets; hover only with a mouse */
+const TOUCH = "@media (pointer: coarse)";
+const HOVER = "@media (hover: hover)";
+
+/* Dialog buttons: side by side on tablet/desktop, full width + stacked on phones */
+const dialogActionsSx = {
+  px: { xs: 2.5, sm: 3 },
+  pb: { xs: 2.5, sm: 2 },
+  pt: 1,
+  gap: 1,
+  flexDirection: { xs: "column-reverse", sm: "row" },
+  "& > :not(style) ~ :not(style)": { ml: { xs: 0, sm: 1 } },
+  "& .MuiButton-root": { width: { xs: "100%", sm: "auto" }, minHeight: 40, [TOUCH]: { minHeight: 44 } },
+};
+
 /* Small square icon button used for download / delete */
 const ActionButton = ({ title, onClick, disabled, color, hoverBg, children }) => (
   <Tooltip title={title} arrow>
@@ -43,14 +58,16 @@ const ActionButton = ({ title, onClick, disabled, color, hoverBg, children }) =>
         size="small"
         onClick={onClick}
         disabled={disabled}
+        aria-label={title}
         sx={{
-          width: 34,
-          height: 34,
-          borderRadius: "9px",
+          width: 36,
+          height: 36,
+          borderRadius: "10px",
           border: `1px solid ${LINE}`,
           bgcolor: "#fff",
           color,
-          "&:hover": { bgcolor: hoverBg, borderColor: color },
+          [HOVER]: { "&:hover": { bgcolor: hoverBg, borderColor: color } },
+          [TOUCH]: { width: 44, height: 44 },
         }}
       >
         {children}
@@ -157,25 +174,31 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
       sx={{
         bgcolor: "#fff",
         borderRadius: 2,
-        p: 2,
+        p: { xs: 1.75, sm: 2, md: 2.5 },
         mb: 2,
         boxShadow: 1,
         width: "100%",
         maxWidth: "100%",
+        boxSizing: "border-box",
+        minWidth: 0,
       }}
     >
-      <Typography variant="subtitle1" fontWeight={600} fontSize={18} sx={{ mb: 1.75 }}>
+      <Typography
+        variant="subtitle1"
+        fontWeight={600}
+        sx={{ fontSize: { xs: 16, sm: 18 }, mb: { xs: 1.25, sm: 1.75 } }}
+      >
         Resume
       </Typography>
 
       {hasResume ? (
         /* ── Resume already uploaded: file card + small Replace ─────────────── */
         <Box sx={{ border: `1px solid ${LINE}`, borderRadius: "12px", overflow: "hidden" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, p: { xs: 1.5, sm: 2 } }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.25, sm: 1.5 }, p: { xs: 1.5, sm: 2 } }}>
             <Box
               sx={{
-                width: 42,
-                height: 42,
+                width: { xs: 38, sm: 42 },
+                height: { xs: 38, sm: 42 },
                 borderRadius: "10px",
                 bgcolor: ACCENT_TINT,
                 color: ACCENT,
@@ -193,27 +216,41 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
                 <Typography
                   onClick={handleDownload}
                   sx={{
-                    fontSize: 14,
+                    fontSize: { xs: 13.5, sm: 14 },
                     fontWeight: 600,
                     color: INK,
                     cursor: "pointer",
-                    whiteSpace: "nowrap",
                     overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    "&:hover": { color: ACCENT, textDecoration: "underline" },
+                    // phones: up to 2 lines so more of the name shows; wider: 1 line with "…"
+                    display: { xs: "-webkit-box", sm: "block" },
+                    WebkitBoxOrient: "vertical",
+                    WebkitLineClamp: { xs: 2, sm: "unset" },
+                    overflowWrap: { xs: "anywhere", sm: "normal" },
+                    whiteSpace: { xs: "normal", sm: "nowrap" },
+                    textOverflow: { sm: "ellipsis" },
+                    lineHeight: 1.35,
+                    [HOVER]: { "&:hover": { color: ACCENT, textDecoration: "underline" } },
                   }}
                 >
                   {resumeFileName}
                 </Typography>
               </Tooltip>
-              <Typography sx={{ fontSize: 12, color: MUTED, mt: 0.25 }}>
-                {[fileExt, uploadedDate && `Uploaded on ${format(uploadedDate, "dd MMM yyyy")}`]
-                  .filter(Boolean)
-                  .join(" · ")}
+              <Typography sx={{ fontSize: { xs: 11.5, sm: 12 }, color: MUTED, mt: 0.25, whiteSpace: "nowrap" }}>
+                {fileExt}
+                {fileExt && uploadedDate ? " · " : ""}
+                {uploadedDate && (
+                  <>
+                    {/* "Uploaded on" is dropped on phones to keep it to one line */}
+                    <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                      Uploaded on{" "}
+                    </Box>
+                    {format(uploadedDate, "dd MMM yyyy")}
+                  </>
+                )}
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
+            <Box sx={{ display: "flex", gap: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
               <ActionButton title="Download" onClick={handleDownload} color={ACCENT} hoverBg={ACCENT_TINT}>
                 <FileDownloadOutlinedIcon fontSize="small" />
               </ActionButton>
@@ -232,19 +269,20 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
           <Box
             sx={{
               display: "flex",
-              alignItems: "center",
+              // phones: message on top, full-width Replace button below
+              flexDirection: { xs: "column", sm: "row" },
+              alignItems: { xs: "stretch", sm: "center" },
               justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 1,
+              gap: { xs: 1.25, sm: 1.5 },
               px: { xs: 1.5, sm: 2 },
-              py: 1,
+              py: { xs: 1.25, sm: 1 },
               bgcolor: "#FFFBEB",
               borderTop: "1px solid #FDE68A",
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-              <InfoOutlinedIcon sx={{ fontSize: 16, color: "#B45309", flexShrink: 0 }} />
-              <Typography sx={{ fontSize: 12.5, color: "#92400E" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.75, minWidth: 0 }}>
+              <InfoOutlinedIcon sx={{ fontSize: 16, color: "#B45309", flexShrink: 0, mt: "2px" }} />
+              <Typography sx={{ fontSize: { xs: 12, sm: 12.5 }, color: "#92400E", lineHeight: 1.5 }}>
                 Uploading a new resume will replace the current one.
               </Typography>
             </Box>
@@ -269,7 +307,12 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
                 borderColor: ACCENT,
                 bgcolor: "#fff",
                 px: 1.5,
-                "&:hover": { bgcolor: ACCENT_TINT, borderColor: ACCENT_HOVER },
+                flexShrink: 0,
+                minHeight: 34,
+                width: { xs: "100%", sm: "auto" },
+                "&:hover": { bgcolor: "#fff", borderColor: ACCENT },
+                [HOVER]: { "&:hover": { bgcolor: ACCENT_TINT, borderColor: ACCENT_HOVER } },
+                [TOUCH]: { minHeight: 44 },
               }}
             >
               {isUploading ? "Uploading..." : "Replace"}
@@ -288,18 +331,20 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
             alignItems: "center",
             justifyContent: "center",
             gap: 1,
-            py: { xs: 3, sm: 3.5 },
+            py: { xs: 2.5, sm: 3.5, md: 4 },
             px: 2,
+            textAlign: "center",
             border: "1.5px dashed #D1D5DB",
             borderRadius: "12px",
             bgcolor: "#FAFAFA",
             cursor: "pointer",
             transition: "all .2s ease",
-            "&:hover": { borderColor: ACCENT, bgcolor: "#F4FBFB" },
+            [HOVER]: { "&:hover": { borderColor: ACCENT, bgcolor: "#F4FBFB" } },
+            "&:active": { borderColor: ACCENT, bgcolor: "#F4FBFB" },
           }}
         >
-          <CloudUploadOutlinedIcon sx={{ fontSize: 34, color: ACCENT }} />
-          <Typography sx={{ fontSize: 14, fontWeight: 600, color: INK }}>
+          <CloudUploadOutlinedIcon sx={{ fontSize: { xs: 30, sm: 34 }, color: ACCENT }} />
+          <Typography sx={{ fontSize: { xs: 13.5, sm: 14 }, fontWeight: 600, color: INK }}>
             Upload your resume
           </Typography>
           <Button
@@ -312,7 +357,10 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
               borderRadius: "999px",
               bgcolor: ACCENT,
               px: 2.5,
-              "&:hover": { bgcolor: ACCENT_HOVER },
+              minHeight: 34,
+              "&:hover": { bgcolor: ACCENT },
+              [HOVER]: { "&:hover": { bgcolor: ACCENT_HOVER } },
+              [TOUCH]: { minHeight: 44, px: 3.5 },
             }}
           >
             {isUploading ? "Uploading..." : "Browse file"}
@@ -335,11 +383,13 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
         onClose={() => setPendingFile(null)}
         maxWidth="xs"
         fullWidth
-        PaperProps={{ sx: { borderRadius: "14px" } }}
+        PaperProps={{ sx: { borderRadius: "14px", m: { xs: 2, sm: 4 }, width: { xs: "calc(100% - 32px)", sm: "100%" } } }}
       >
-        <DialogTitle sx={{ fontWeight: 600, color: INK, pb: 1 }}>Replace resume?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ fontSize: 14, color: MUTED }}>
+        <DialogTitle sx={{ fontWeight: 600, color: INK, pb: 1, fontSize: { xs: 17, sm: 20 }, px: { xs: 2.5, sm: 3 } }}>
+          Replace resume?
+        </DialogTitle>
+        <DialogContent sx={{ px: { xs: 2.5, sm: 3 } }}>
+          <Typography sx={{ fontSize: { xs: 13.5, sm: 14 }, color: MUTED, overflowWrap: "anywhere" }}>
             <Box component="span" sx={{ color: INK, fontWeight: 600 }}>
               {resumeFileName}
             </Box>{" "}
@@ -350,7 +400,7 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
             . The current resume will be overwritten.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={dialogActionsSx}>
           <Button
             onClick={() => setPendingFile(null)}
             variant="outlined"
@@ -375,18 +425,20 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
         onClose={() => setConfirmDelete(false)}
         maxWidth="xs"
         fullWidth
-        PaperProps={{ sx: { borderRadius: "14px" } }}
+        PaperProps={{ sx: { borderRadius: "14px", m: { xs: 2, sm: 4 }, width: { xs: "calc(100% - 32px)", sm: "100%" } } }}
       >
-        <DialogTitle sx={{ fontWeight: 600, color: INK, pb: 1 }}>Delete resume?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ fontSize: 14, color: MUTED }}>
+        <DialogTitle sx={{ fontWeight: 600, color: INK, pb: 1, fontSize: { xs: 17, sm: 20 }, px: { xs: 2.5, sm: 3 } }}>
+          Delete resume?
+        </DialogTitle>
+        <DialogContent sx={{ px: { xs: 2.5, sm: 3 } }}>
+          <Typography sx={{ fontSize: { xs: 13.5, sm: 14 }, color: MUTED, overflowWrap: "anywhere" }}>
             <Box component="span" sx={{ color: INK, fontWeight: 600 }}>
               {resumeFileName}
             </Box>{" "}
             will be removed from your profile.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={dialogActionsSx}>
           <Button
             onClick={() => setConfirmDelete(false)}
             variant="outlined"

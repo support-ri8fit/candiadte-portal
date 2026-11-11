@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef, useLayoutEffect } from "react";
 import Verified from "@mui/icons-material/Verified";
 import {
   Box,
@@ -23,6 +23,7 @@ import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import NotesOutlinedIcon from "@mui/icons-material/NotesOutlined";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { AppContext } from "../../../../AppContext";
 import {
   useGetCandidateProfileImageQuery,
@@ -82,6 +83,125 @@ const GroupHeading = ({ icon: Icon, title }) => (
   </Box>
 );
 
+/* ── About text: same number of lines on every screen ─────────────────────
+   Clamps to ABOUT_LINES lines with CSS (not a character count), so a phone and a
+   wide monitor both show 3 lines. "See more" only appears when the text really
+   is cut off — checked again whenever the box is resized. */
+const ABOUT_LINES = 3;
+
+function AboutText({ text, onAdd }) {
+  const ref = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const check = () => {
+      if (expanded) return; // measure only while clamped
+      setOverflowing(el.scrollHeight - el.clientHeight > 1);
+    };
+    check();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [text, expanded]);
+
+  // Collapse again when the text changes (e.g. after editing)
+  useEffect(() => setExpanded(false), [text]);
+
+  if (!text?.trim()) {
+    return (
+      <Box
+        sx={{
+          border: `1px dashed ${palette.line}`,
+          borderRadius: "10px",
+          px: 2,
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1.5,
+          flexWrap: "wrap",
+        }}
+      >
+        <Typography sx={{ fontSize: 13.5, color: palette.muted }}>
+          Add a short summary of your experience and strengths.
+        </Typography>
+        <Box
+          component="button"
+          type="button"
+          onClick={onAdd}
+          sx={{
+            border: "none",
+            background: "none",
+            p: 0,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 13.5,
+            fontWeight: 700,
+            color: palette.teal,
+            "&:hover": { textDecoration: "underline", textUnderlineOffset: "3px" },
+          }}
+        >
+          + Add summary
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Typography
+        ref={ref}
+        sx={{
+          fontSize: { xs: 13.5, sm: 14 },
+          color: palette.ink,
+          lineHeight: 1.7,
+          whiteSpace: "pre-line", // keep the candidate's own line breaks
+          overflowWrap: "anywhere",
+          ...(expanded
+            ? {}
+            : {
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
+                WebkitLineClamp: ABOUT_LINES,
+                overflow: "hidden",
+              }),
+        }}
+      >
+        {text}
+      </Typography>
+
+      {(overflowing || expanded) && (
+        <Button
+          size="small"
+          onClick={() => setExpanded((v) => !v)}
+          endIcon={
+            <ExpandMoreRoundedIcon
+              sx={{ transition: "transform .2s ease", transform: expanded ? "rotate(180deg)" : "none" }}
+            />
+          }
+          aria-expanded={expanded}
+          sx={{
+            mt: 0.75,
+            px: 0,
+            minWidth: "unset",
+            textTransform: "none",
+            fontWeight: 700,
+            fontSize: 13,
+            color: palette.teal,
+            "& .MuiButton-endIcon": { ml: 0.25 },
+            "&:hover": { bgcolor: "transparent", textDecoration: "underline", textUnderlineOffset: "3px" },
+          }}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </Button>
+      )}
+    </Box>
+  );
+}
+
 const dialogFieldSx = {
   "& .MuiOutlinedInput-root": {
     "& fieldset": { borderColor: palette.line },
@@ -102,7 +222,6 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
   });
   const [uploadError, setUploadError] = useState(null);
   const [viewError, setViewError] = useState(null);
-  const [expanded, setExpanded] = useState(false);
   const {
     data: candidateDetails,
     isLoading,
@@ -113,7 +232,6 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
     candidate?.employment?.find((emp) => emp.is_current) ||
     candidate?.employment?.[0] ||
     {};
-  console.log("candidateDetails", candidateDetails?.data.employment_id);
   const personal = candidate?.personal_details || {};
   const [basicInfo, setBasicInfo] = useState({
     full_name: candidateInfo?.full_name || "",
@@ -131,12 +249,6 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
     profile_picture: candidate?.profile_image_url || "",
     current_salary: getEmployment?.current_salary || "",
   });
-
-  const MAX_LENGTH = 250;
-  const isLongText = basicInfo.summary?.length > MAX_LENGTH;
-  const displayText = expanded
-    ? basicInfo.summary
-    : basicInfo.summary?.slice(0, MAX_LENGTH);
 
   const lastUpdatedDate = candidate?.updated_at
     ? new Date(candidate.updated_at).toLocaleDateString("en-US", {
@@ -216,7 +328,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
     try {
       const payload = {
         full_name: basicInfo.full_name,
-        employment_id: candidateDetails?.data.employment_id,
+        employment_id: candidateDetails?.data?.employment_id,
         notice_period_days: Number(basicInfo.notice_period_days),
         company_name: basicInfo.company_name,
         designation: basicInfo.designation,
@@ -470,30 +582,13 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
 
         {/* ── About ── */}
         <Divider sx={{ my: 2.5, borderColor: palette.line }} />
-        <Typography sx={{ fontFamily: fonts.display, fontWeight: 600, fontSize: 15, color: palette.ink, mb: 1 }}>
-          About
-        </Typography>
-        <Typography sx={{ fontSize: 14, color: palette.ink, lineHeight: 1.6 }}>
-          {displayText}
-          {!expanded && isLongText && "..."}
-        </Typography>
-        {isLongText && (
-          <Button
-            size="small"
-            onClick={() => setExpanded(!expanded)}
-            sx={{
-              mt: 0.5,
-              p: 0,
-              minWidth: "unset",
-              textTransform: "none",
-              fontWeight: 600,
-              color: palette.teal,
-              "&:hover": { bgcolor: "transparent", textDecoration: "underline" },
-            }}
-          >
-            {expanded ? "See Less" : "See More..."}
-          </Button>
-        )}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <NotesOutlinedIcon sx={{ fontSize: 18, color: palette.teal }} />
+          <Typography sx={{ fontFamily: fonts.display, fontWeight: 600, fontSize: 15, color: palette.ink }}>
+            About
+          </Typography>
+        </Box>
+        <AboutText text={basicInfo.summary} onAdd={() => setOpen(true)} />
       </Box>
 
       {/* ── Edit Dialog — same design as the Personal Details dialog ── */}

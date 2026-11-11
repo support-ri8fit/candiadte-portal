@@ -17,6 +17,8 @@ import {
   IconButton,
   Grid,
   Divider,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
@@ -38,17 +40,31 @@ const LINE = "#DDE1EA";
 const CORAL = "#D9534F";
 const DISPLAY_FONT = "Georgia, 'Times New Roman', serif";
 
+/* Device helpers
+   TOUCH — phones / tablets: 16px input text (stops iPhone/iPad Safari zooming
+           in on focus) and 44px tap targets.
+   HOVER — hover effects only for a real mouse (no "stuck" hover after a tap). */
+const TOUCH = "@media (pointer: coarse)";
+const HOVER = "@media (hover: hover)";
+
 const fieldSx = {
   "& .MuiOutlinedInput-root": {
     background: "#fff",
     "& fieldset": { borderColor: "#DDE1EA" },
-    "&:hover fieldset": { borderColor: PRIMARY },
+    [HOVER]: { "&:hover fieldset": { borderColor: PRIMARY } },
     "&.Mui-focused fieldset": { borderColor: PRIMARY },
+    [TOUCH]: { fontSize: 16 },
   },
   "& .MuiInputLabel-root.Mui-focused": { color: PRIMARY },
 };
 
-const radioSx = { color: LINE, p: 0.5, mr: 0.5, "&.Mui-checked": { color: PRIMARY } };
+const radioSx = {
+  color: LINE,
+  p: 0.5,
+  mr: 0.5,
+  "&.Mui-checked": { color: PRIMARY },
+  [TOUCH]: { p: 1 },
+};
 
 /* Group heading — same as the Personal Details dialog */
 const GroupHeading = ({ icon: Icon, title }) => (
@@ -62,7 +78,7 @@ const GroupHeading = ({ icon: Icon, title }) => (
 
 /* Divider + heading + content block */
 const Section = ({ icon, title, children }) => (
-  <Box sx={{ mt: 3 }}>
+  <Box sx={{ mt: { xs: 2.5, sm: 3 } }}>
     <Divider sx={{ mb: 2, borderColor: LINE }} />
     <GroupHeading icon={icon} title={title} />
     {children}
@@ -112,6 +128,8 @@ const autocompletePaperProps = {
         backgroundColor: `${PRIMARY_LIGHT} !important`,
         color: PRIMARY_HOVER,
       },
+      // bigger rows on touch screens
+      [TOUCH]: { "& .MuiAutocomplete-option": { minHeight: 44 } },
     },
   },
 };
@@ -141,11 +159,14 @@ const FieldLabel = ({ children }) => (
   </Typography>
 );
 
+/* Currency column width — a little narrower on phones to leave room for the amount */
+const CURRENCY_WIDTH = { xs: 80, sm: 96 };
+
 /* Read-only currency box next to Fixed / Variable / Stock amounts */
 const CurrencyBox = ({ currency }) => (
   <Box
     sx={{
-      width: 96,
+      width: CURRENCY_WIDTH,
       height: 40,
       flexShrink: 0,
       border: `1px solid ${LINE}`,
@@ -166,6 +187,7 @@ const skillChipSx = {
   borderColor: PRIMARY,
   color: PRIMARY_HOVER,
   backgroundColor: "#fff",
+  maxWidth: "100%",
   "& .MuiChip-deleteIcon": { color: PRIMARY },
   "& .MuiChip-deleteIcon:hover": { color: PRIMARY_HOVER },
 };
@@ -275,6 +297,10 @@ const AddEmployment = ({
 }) => {
   const [error, setError] = useState("");
   const [errors, setErrors] = useState({});
+
+  // Phones: the form opens full screen (long form, small screen)
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down("sm"));
 
   const initialState = {
     id: "",
@@ -645,7 +671,7 @@ const AddEmployment = ({
   /* Currency + amount row. The main salary row has a currency dropdown;
      the others show the same currency in a read-only box. */
   const renderAmountRow = ({ field, placeholder, selectableCurrency = false }) => (
-    <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
+    <Box sx={{ display: "flex", gap: { xs: 1, sm: 1.5 }, alignItems: "flex-start", minWidth: 0 }}>
       {selectableCurrency ? (
         <Autocomplete
           options={currencyOptions}
@@ -654,7 +680,7 @@ const AddEmployment = ({
           disableClearable
           size="small"
           componentsProps={autocompletePaperProps}
-          sx={{ width: 96, flexShrink: 0 }}
+          sx={{ width: CURRENCY_WIDTH, flexShrink: 0 }}
           renderInput={(params) => <TextField {...params} sx={fieldSx} />}
         />
       ) : (
@@ -670,7 +696,7 @@ const AddEmployment = ({
           setLocalData((prev) => ({ ...prev, [field]: digits }));
         }}
         inputProps={{ inputMode: "numeric" }}
-        sx={fieldSx}
+        sx={{ ...fieldSx, minWidth: 0 }}
       />
     </Box>
   );
@@ -747,7 +773,8 @@ const AddEmployment = ({
                       color: selected ? PRIMARY_HOVER : MUTED,
                       backgroundColor: selected ? PRIMARY_LIGHT : "#fff",
                       fontWeight: selected ? 700 : 500,
-                      "&:hover": { borderColor: PRIMARY },
+                      [HOVER]: { "&:hover": { borderColor: PRIMARY } },
+                      [TOUCH]: { height: 40, px: 1 },
                     }}
                   />
                 );
@@ -761,7 +788,10 @@ const AddEmployment = ({
             <FieldLabel>Value of stock benefits</FieldLabel>
             {renderAmountRow({
               field: "value_of_stocks",
-              placeholder: "Share total stock value you receive as part of your package",
+              // shorter hint on phones so it isn't cut off
+              placeholder: isPhone
+                ? "Total stock value"
+                : "Share total stock value you receive as part of your package",
             })}
           </Box>
         )}
@@ -776,6 +806,8 @@ const AddEmployment = ({
     day: { sx: datePickerDaySx },
   };
 
+  const isEditTitle = editingIndex !== null && editingIndex !== undefined;
+
   return (
     <Dialog
       open={open}
@@ -785,19 +817,44 @@ const AddEmployment = ({
       }}
       maxWidth="sm"
       fullWidth
-      PaperProps={{ sx: { borderRadius: "14px" } }}
+      // Phones: full-screen form; tablets / desktop: centred dialog
+      fullScreen={isPhone}
+      PaperProps={{
+        sx: {
+          borderRadius: isPhone ? 0 : "14px",
+          // keep clear of the iPhone notch
+          pt: isPhone ? "env(safe-area-inset-top)" : 0,
+        },
+      }}
     >
-      <DialogTitle sx={{ fontFamily: DISPLAY_FONT, fontWeight: 600, color: INK }}>
-        {editingIndex !== null ? "Edit Employment" : "Add Employment"}
+      <DialogTitle
+        sx={{
+          fontFamily: DISPLAY_FONT,
+          fontWeight: 600,
+          color: INK,
+          fontSize: { xs: 18, sm: 20 },
+          px: { xs: 2, sm: 3 },
+          py: { xs: 1.75, sm: 2 },
+          pr: 7, // room for the close button
+        }}
+      >
+        {isEditTitle ? "Edit Employment" : "Add Employment"}
         <IconButton
           onClick={() => setOpen(false)}
-          sx={{ position: "absolute", right: 8, top: 8, color: PRIMARY }}
+          aria-label="Close"
+          sx={{
+            position: "absolute",
+            right: { xs: 6, sm: 8 },
+            top: { xs: 8, sm: 10 },
+            color: PRIMARY,
+            [TOUCH]: { p: 1.1 },
+          }}
         >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers>
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
         {error && (
           <Typography sx={{ color: CORAL, mb: 2 }} variant="body2">
             {error}
@@ -859,7 +916,7 @@ const AddEmployment = ({
                     size="small"
                     componentsProps={autocompletePaperProps}
                     renderInput={(params) => (
-                      <TextField {...params} label="Experience (Years)" sx={fieldSx} />
+                      <TextField {...params} label={isPhone ? "Years" : "Exp. (Years)"} sx={fieldSx} />
                     )}
                   />
                 </Grid>
@@ -871,7 +928,7 @@ const AddEmployment = ({
                     size="small"
                     componentsProps={autocompletePaperProps}
                     renderInput={(params) => (
-                      <TextField {...params} label="Experience (Months)" sx={fieldSx} />
+                      <TextField {...params} label={isPhone ? "Months" : "Exp. (Months)"} sx={fieldSx} />
                     )}
                   />
                 </Grid>
@@ -1018,7 +1075,7 @@ const AddEmployment = ({
                       <TextField
                         {...params}
                         label="Tech Skills"
-                        placeholder="Type to add or pick from list"
+                        placeholder={isPhone ? "Type or pick" : "Type to add or pick from list"}
                         onKeyDown={handleCustomSkillAdd}
                         sx={fieldSx}
                       />
@@ -1151,7 +1208,22 @@ const AddEmployment = ({
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
+      {/* Phones: full-width buttons, main action on top, clear of the home bar */}
+      <DialogActions
+        sx={{
+          px: { xs: 2, sm: 3 },
+          pt: { xs: 1.5, sm: 2 },
+          pb: { xs: "calc(12px + env(safe-area-inset-bottom))", sm: 2 },
+          gap: 1,
+          flexDirection: { xs: "column-reverse", sm: "row" },
+          "& > :not(style) ~ :not(style)": { ml: { xs: 0, sm: 1 } },
+          "& .MuiButton-root": {
+            width: { xs: "100%", sm: "auto" },
+            minHeight: 40,
+            [TOUCH]: { minHeight: 44 },
+          },
+        }}
+      >
         <Button
           onClick={() => setOpen(false)}
           variant="outlined"
@@ -1162,14 +1234,16 @@ const AddEmployment = ({
         <Button
           onClick={handleSave}
           variant="contained"
+          disableElevation
           sx={{
             bgcolor: PRIMARY,
             textTransform: "none",
             fontWeight: 600,
-            "&:hover": { bgcolor: PRIMARY_HOVER },
+            "&:hover": { bgcolor: PRIMARY },
+            [HOVER]: { "&:hover": { bgcolor: PRIMARY_HOVER } },
           }}
         >
-          {editingIndex !== null ? "Save Changes" : "Add Employment"}
+          {isEditTitle ? "Save Changes" : "Add Employment"}
         </Button>
       </DialogActions>
     </Dialog>

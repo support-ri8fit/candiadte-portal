@@ -28,7 +28,7 @@ import { ACCESS_TOKEN, clearLocalStorage } from "./utils/helper";
 import { refreshMeSilently } from "./services/meService";
 import GoogleCallback from "./services/GoogleCallback";
 import { useSelector } from "react-redux";
-
+import CandidateSettings from "./pages/Candidate/settings";
 const CandidateLayout = lazy(() => import("./components/CandidateLayout"));
 
 function App() {
@@ -110,6 +110,7 @@ function App() {
                 element={<CandidateReqisitionJobDetails />}
               />
               <Route path="analysis" element={<CandidateGapAnalysis />} />
+              <Route path="settings" element={<CandidateSettings />} />
             </Route>
           </Route>
         </Routes>

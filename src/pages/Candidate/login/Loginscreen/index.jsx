@@ -460,13 +460,22 @@ const CandidateLogin = () => {
                 </Button>
 
                 <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<MicrosoftIcon />}
-                  sx={socialBtnSx}
-                >
-                  Sign in with Microsoft
-                </Button>
+  fullWidth
+  variant="outlined"
+  disabled
+  startIcon={<MicrosoftIcon />}
+  sx={{
+    ...socialBtnSx,
+    "&.Mui-disabled": {
+      background: "#f9fafb",
+      borderColor: "#e5e7eb",
+      color: "#9ca3af",
+      "& .MuiButton-startIcon": { opacity: 0.5 },
+    },
+  }}
+>
+  Sign in with Microsoft
+</Button>
               </Box>
             </>
           )}

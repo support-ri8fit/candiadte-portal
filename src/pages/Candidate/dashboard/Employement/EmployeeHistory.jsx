@@ -1,9 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Box, Typography, IconButton, Button, Paper, Chip } from "@mui/material";
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import {
+  Box,
+  Typography,
+  IconButton,
+  Button,
+  Paper,
+  Chip,
+  Tooltip,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import WorkOutlineOutlinedIcon from "@mui/icons-material/WorkOutlineOutlined";
-import { format } from "date-fns";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import { format, isValid } from "date-fns";
 import AddEmployment from "./AddEmployeement.jsx";
 import {
   useAddCandidateEmploymentMutation,
@@ -13,7 +25,124 @@ import {
 } from "../../../../store/api/settings/CandidatePortalApis";
 import { palette, fonts } from "../../../../theme/candidateTokens";
 
+/* Device helpers — finger input gets 44px targets; hover effects only with a mouse */
+const TOUCH = "@media (pointer: coarse)";
+const HOVER = "@media (hover: hover)";
+
+/* "2023-04-01" / "2023/04/01" → "Apr 2023". Anything it can't read is shown as-is. */
+const formatMonthYear = (value) => {
+  if (!value) return "";
+  const d = new Date(String(value).replace(/\//g, "-"));
+  return isValid(d) ? format(d, "MMM yyyy") : String(value);
+};
+
+/* One "Label: value" line, side by side. `stack` puts the label above the value
+   on phones — used for the long Summary text so it gets the full width. */
+const InfoLine = ({ label, children, stack = false }) => (
+  <Box
+    sx={{
+      display: "flex",
+      flexDirection: stack ? { xs: "column", sm: "row" } : "row",
+      gap: stack ? { xs: 0.25, sm: 1 } : 1,
+      alignItems: stack ? { xs: "stretch", sm: "baseline" } : "baseline",
+      mt: 1,
+      minWidth: 0,
+    }}
+  >
+    <Typography
+      sx={{
+        fontSize: { xs: 12.5, sm: 13.5 },
+        color: palette.ink,
+        fontWeight: 600,
+        flexShrink: 0,
+        minWidth: { sm: 110 },
+      }}
+    >
+      {label}
+    </Typography>
+    <Box sx={{ color: palette.muted, fontSize: { xs: 13, sm: 13.5 }, minWidth: 0, flex: 1 }}>
+      {children}
+    </Box>
+  </Box>
+);
+
+/* Responsibilities text — 3 lines on every screen, "Show more" only when cut off.
+   Defined OUTSIDE the main component so its open/closed state isn't reset on
+   every re-render of the list. */
+const SUMMARY_LINES = 3;
+function SummaryToggle({ text }) {
+  const ref = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const check = () => {
+      if (!expanded) setOverflowing(el.scrollHeight - el.clientHeight > 1);
+    };
+    check();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [text, expanded]);
+
+  if (!text) return null;
+  return (
+    <>
+      <Typography
+        ref={ref}
+        sx={{
+          color: palette.muted,
+          fontSize: { xs: 13, sm: 13.5 },
+          lineHeight: 1.6,
+          whiteSpace: "pre-line",
+          overflowWrap: "anywhere",
+          ...(expanded
+            ? {}
+            : {
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
+                WebkitLineClamp: SUMMARY_LINES,
+                overflow: "hidden",
+              }),
+        }}
+      >
+        {text}
+      </Typography>
+      {(overflowing || expanded) && (
+        <Button
+          size="small"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          endIcon={
+            <ExpandMoreRoundedIcon
+              sx={{ transition: "transform .2s ease", transform: expanded ? "rotate(180deg)" : "none" }}
+            />
+          }
+          sx={{
+            mt: 0.5,
+            px: 0,
+            minWidth: "unset",
+            fontSize: 12.5,
+            fontWeight: 700,
+            textTransform: "none",
+            color: palette.teal,
+            "& .MuiButton-endIcon": { ml: 0.25 },
+            "&:hover": { bgcolor: "transparent" },
+            [HOVER]: { "&:hover": { textDecoration: "underline", textUnderlineOffset: "3px" } },
+          }}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </Button>
+      )}
+    </>
+  );
+}
+
 const EmploymentForm = ({ employmentHistroyInfo, onSectionComplete }) => {
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down("sm"));
   const [open, setOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [employmentHistory, setEmploymentHistory] = useState([]);
@@ -302,71 +431,71 @@ const EmploymentForm = ({ employmentHistroyInfo, onSectionComplete }) => {
     setOpen(true);
   }, []);
 
-  const SummaryToggle = ({ text, limit = 150 }) => {
-    const [expanded, setExpanded] = React.useState(false);
-
-    if (!text) return null;
-
-    const isLong = text.length > limit;
-    const displayText = expanded ? text : text.slice(0, limit);
-
-    return (
-      <Typography sx={{ mt: 0, ml: 1, color: palette.muted, fontSize: { xs: 12, sm: 13.5 } }}>
-        {displayText}
-        {isLong && (
-          <Button
-            onClick={() => setExpanded(!expanded)}
-            sx={{
-              ml: 1,
-              p: 0,
-              minWidth: "unset",
-              fontSize: { xs: 11, sm: 12 },
-              textTransform: "none",
-              color: palette.teal,
-              "&:hover": { bgcolor: "transparent", textDecoration: "underline" },
-            }}
-          >
-            {expanded ? "See Less" : "See More..."}
-          </Button>
-        )}
-      </Typography>
-    );
-  };
-
   return (
     <Paper
       elevation={0}
-      sx={{ bgcolor: palette.paper, border: `1px solid ${palette.line}`, borderRadius: "14px", p: { xs: 2.5, sm: 3 } }}
+      sx={{
+        bgcolor: palette.paper,
+        border: `1px solid ${palette.line}`,
+        borderRadius: "14px",
+        p: { xs: 1.75, sm: 2.5, md: 3 },
+        width: "100%",
+        boxSizing: "border-box",
+        minWidth: 0,
+      }}
     >
-      <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+      {/* Header — icon + title left, Add right; always one line */}
+      <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.25 }, minWidth: 0 }}>
           <Box
             sx={{
-              width: 34,
-              height: 34,
+              width: { xs: 30, sm: 34 },
+              height: { xs: 30, sm: 34 },
               borderRadius: "9px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               bgcolor: palette.tealSoft,
               color: palette.teal,
+              flexShrink: 0,
             }}
           >
-            <WorkOutlineOutlinedIcon sx={{ fontSize: 18 }} />
+            <WorkOutlineOutlinedIcon sx={{ fontSize: { xs: 16, sm: 18 } }} />
           </Box>
-          <Typography sx={{ fontFamily: fonts.display, fontWeight: 600, fontSize: 17, color: palette.ink }}>
+          <Typography
+            sx={{
+              fontFamily: fonts.display,
+              fontWeight: 600,
+              fontSize: { xs: 15.5, sm: 17 },
+              color: palette.ink,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
             Employment History
           </Typography>
         </Box>
         <Button
           variant="contained"
           size="small"
+          disableElevation
+          startIcon={<AddRoundedIcon sx={{ fontSize: 18 }} />}
+          aria-label="Add experience"
           sx={{
             bgcolor: palette.teal,
             textTransform: "none",
             fontWeight: 600,
-            fontSize: { xs: 12, sm: 13 },
-            "&:hover": { bgcolor: palette.tealDeep },
+            fontSize: { xs: 12.5, sm: 13 },
+            borderRadius: "8px",
+            px: { xs: 1.25, sm: 1.75 },
+            minHeight: 34,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+            "& .MuiButton-startIcon": { mr: { xs: 0.5, sm: 0.75 } },
+            "&:hover": { bgcolor: palette.teal },
+            [HOVER]: { "&:hover": { bgcolor: palette.tealDeep } },
+            [TOUCH]: { minHeight: 40 },
           }}
           onClick={() => {
             setEditingIndex(null);
@@ -374,7 +503,8 @@ const EmploymentForm = ({ employmentHistroyInfo, onSectionComplete }) => {
             setOpen(true);
           }}
         >
-          + Add Experience
+          {/* Short label on phones so it never wraps */}
+          {isPhone ? "Add" : "Add Experience"}
         </Button>
       </Box>
 
@@ -383,99 +513,123 @@ const EmploymentForm = ({ employmentHistroyInfo, onSectionComplete }) => {
       )}
 
       {employmentHistory.length === 0 && (
-        <Typography sx={{ color: palette.muted, fontSize: 13.5, mt: 2 }}>
+        <Typography sx={{ color: palette.muted, fontSize: { xs: 13, sm: 13.5 }, mt: 2 }}>
           No employment history added yet.
         </Typography>
       )}
 
-      {employmentHistory.map((employment, index) => (
-        <Box
-          key={employment.id || index}
-          sx={{
-            mt: 2,
-            p: 2.25,
-            position: "relative",
-            border: `1px solid ${palette.line}`,
-            borderRadius: "10px",
-            "&:hover": { borderColor: palette.teal },
-          }}
-        >
-          <Box position="absolute" top={10} right={10} display="flex" gap={0.5}>
-            <IconButton size="small" sx={{ color: palette.teal }} onClick={() => handleEditData(employment, index)}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-            <IconButton size="small" sx={{ color: palette.coral }} onClick={() => handleDelete(employment)}>
-              <DeleteOutlineIcon fontSize="small" />
-            </IconButton>
-          </Box>
+      {employmentHistory.map((employment, index) => {
+        const start = formatMonthYear(employment.joining_date);
+        const end = employment.is_current
+          ? "Present"
+          : formatMonthYear(employment.end_date) || "Not specified";
+        const place = [employment.location, employment.country].filter(Boolean).join(", ");
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-            <Typography sx={{ fontSize: { xs: 13, sm: 15 }, fontWeight: 600, color: palette.ink }}>
-              {employment.job_title}
-            </Typography>
-            {employment.is_current && (
-              <Chip
-                label="Current"
-                size="small"
-                sx={{ height: 20, fontSize: 10.5, fontWeight: 600, bgcolor: palette.tealSoft, color: palette.teal }}
-              />
+        return (
+          <Box
+            key={employment.id || index}
+            sx={{
+              mt: { xs: 1.5, sm: 2 },
+              p: { xs: 1.5, sm: 2.25 },
+              border: `1px solid ${palette.line}`,
+              borderRadius: "10px",
+              minWidth: 0,
+              transition: "border-color .15s ease",
+              [HOVER]: { "&:hover": { borderColor: palette.teal } },
+            }}
+          >
+            {/* Title row — text on the left, actions on the right (no overlap) */}
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+                  <Typography
+                    sx={{
+                      fontSize: { xs: 14, sm: 15 },
+                      fontWeight: 600,
+                      color: palette.ink,
+                      lineHeight: 1.35,
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {employment.job_title || "Untitled role"}
+                  </Typography>
+                  {employment.is_current && (
+                    <Chip
+                      label="Current"
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        bgcolor: palette.tealSoft,
+                        color: palette.teal,
+                      }}
+                    />
+                  )}
+                </Box>
+                <Typography
+                  sx={{
+                    color: palette.teal,
+                    fontSize: { xs: 13, sm: 14 },
+                    fontWeight: 500,
+                    mt: 0.25,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {employment.company_name}
+                </Typography>
+                {(start || end) && (
+                  <Typography
+                    sx={{ color: palette.muted, fontFamily: fonts.mono, fontSize: { xs: 11.5, sm: 12.5 }, mt: 0.25 }}
+                  >
+                    {start || "—"} – {end}
+                  </Typography>
+                )}
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0, mt: -0.5, mr: -0.5 }}>
+                <Tooltip title="Edit" arrow>
+                  <IconButton
+                    size="small"
+                    aria-label="Edit employment"
+                    sx={{ color: palette.teal, [TOUCH]: { p: 1.1 } }}
+                    onClick={() => handleEditData(employment, index)}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete" arrow>
+                  <IconButton
+                    size="small"
+                    aria-label="Delete employment"
+                    sx={{ color: palette.coral, [TOUCH]: { p: 1.1 } }}
+                    onClick={() => handleDelete(employment)}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Box>
+
+            <InfoLine label="Duration:">{employment.duration || "Not specified"}</InfoLine>
+
+            {place && <InfoLine label="Location:">{place}</InfoLine>}
+
+            {!!employment.current_salary && (
+              <InfoLine label="Current Salary:">
+                {employment.currency || "₹"}
+                {formatSalaryDisplay(employment.current_salary, employment.currency)}
+              </InfoLine>
+            )}
+
+            {employment.key_responsibilities && (
+              <InfoLine label="Summary:" stack>
+                <SummaryToggle text={employment.key_responsibilities} />
+              </InfoLine>
             )}
           </Box>
-          <Typography sx={{ color: palette.teal, fontSize: { xs: 12.5, sm: 14 }, fontWeight: 500 }}>
-            {employment.company_name}
-          </Typography>
-          <Typography sx={{ color: palette.muted, fontFamily: fonts.mono, fontSize: { xs: 11.5, sm: 13 }, mt: 0.25 }}>
-            {employment.joining_date} —{" "}
-            {employment.is_current ? "Present" : employment.end_date || "Not specified"}
-          </Typography>
-
-          <Box sx={{ display: "flex", mt: 1 }}>
-            <Typography sx={{ fontSize: { xs: 12, sm: 13.5 }, color: palette.ink, fontWeight: 500 }}>
-              Duration:
-            </Typography>
-            <Typography sx={{ ml: 1, color: palette.muted, fontSize: { xs: 12, sm: 13.5 } }}>
-              {employment.duration || "Not specified"}
-            </Typography>
-          </Box>
-
-          {employment.location && (
-            <Box display="flex">
-              <Typography sx={{ fontSize: { xs: 12, sm: 13.5 }, color: palette.ink, fontWeight: 500 }}>
-                Location:
-              </Typography>
-              <Typography sx={{ ml: 1, color: palette.muted, fontSize: { xs: 12, sm: 13.5 } }}>
-                {employment.location}, {employment.country}
-              </Typography>
-            </Box>
-          )}
-
-          {/* NEW: Current / Expected salary row — only renders when at least one is present */}
-          {!!employment.current_salary && (
-            <Box sx={{ display: "flex", gap: 3, mt: 1, flexWrap: "wrap" }}>
-              {!!employment.current_salary && (
-                <Box display="flex">
-                  <Typography sx={{ fontSize: { xs: 12, sm: 13.5 }, color: palette.ink, fontWeight: 500 }}>
-                    Current Salary:
-                  </Typography>
-                  <Typography sx={{ ml: 1, color: palette.muted, fontSize: { xs: 12, sm: 13.5 } }}>
-                    {employment.currency || "₹"}
-                    {formatSalaryDisplay(employment.current_salary, employment.currency)}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          )}
-
-          {employment.key_responsibilities && (
-            <Box sx={{ display: "flex" }}>
-              <Typography sx={{ fontSize: { xs: 12, sm: 13.5 }, color: palette.ink, fontWeight: 500 }}>
-                Summary:
-              </Typography>
-              <SummaryToggle text={employment.key_responsibilities} />
-            </Box>
-          )}
-        </Box>
-      ))}
+        );
+      })}
 
       <AddEmployment
         open={open}

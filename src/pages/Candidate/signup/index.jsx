@@ -908,28 +908,35 @@ useEffect(() => {
                   Sign up with Google
                 </Button>
                 <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<MicrosoftIcon />}
-                  sx={{
-                    background: "#fff",
-                    border: "1px solid #dde1e7",
-                    color: "#374151",
-                    textTransform: "none",
-                    borderRadius: "8px",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    py: 0.8,
-                    boxShadow: "none",
-                    "&:hover": {
-                      background: "#f5f7fa",
-                      borderColor: "#b0b7c3",
-                      boxShadow: "none",
-                    },
-                  }}
-                >
-                  Sign up with Microsoft
-                </Button>
+  fullWidth
+  variant="outlined"
+  disabled
+  startIcon={<MicrosoftIcon />}
+  sx={{
+    background: "#fff",
+    border: "1px solid #dde1e7",
+    color: "#374151",
+    textTransform: "none",
+    borderRadius: "8px",
+    fontSize: "13px",
+    fontWeight: 500,
+    py: 0.8,
+    boxShadow: "none",
+    "&:hover": {
+      background: "#f5f7fa",
+      borderColor: "#b0b7c3",
+      boxShadow: "none",
+    },
+    "&.Mui-disabled": {
+      background: "#f9fafb",
+      borderColor: "#e5e7eb",
+      color: "#9ca3af",
+      "& .MuiButton-startIcon": { opacity: 0.5 },
+    },
+  }}
+>
+  Sign up with Microsoft
+</Button>
               </Box>
             </>
           )}
