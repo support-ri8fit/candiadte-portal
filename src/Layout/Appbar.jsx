@@ -20,7 +20,7 @@ import {
 } from "../utils/helper.js";
 import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
-import ri8fitLogo from "../assets/Ri8fit_logo.png";
+import ri8fitLogo from "../assets/Ri8fit_Logo.png";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 
 /* ── Candidate display name ───────────────────────────────────────────────
