@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import logoDark from "../../assets/Ri8fit_logo.png";
+import logoDark from "../../assets/Ri8fit_Logo.png";
 
 /* ================= DESIGN TOKENS ================= */
 const T = {
