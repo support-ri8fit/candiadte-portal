@@ -421,11 +421,23 @@ export const candidatePortalService = createApi({
         method: "GET",
       }),
     }),
+        // Logout — tells the backend the candidate signed out.
+    // Uses rawBaseQuery (no token-refresh retry), so an expired token
+    // can't trigger a "session expired" redirect while logging out.
+    candidateLogout: builder.mutation({
+      queryFn: (_arg, api, extraOptions) =>
+        rawBaseQuery(
+          { url: "/auth/candidate/logout", method: "GET" },
+          api,
+          extraOptions
+        ),
+    }),
   }),
 });
 
 export const {
   useCandidateLoginMutation,
+  useCandidateLogoutMutation,
   useCandidateSignupMutation,
   useVerifyCandidateOtpMutation,
   useResendCandidateOtpMutation,
@@ -470,4 +482,5 @@ export const {
   useGetCandidateCertificationsQuery,
   useGetProfileCompletionQuery,
   useGetProfileCompletionFieldsQuery,
+  
 } = candidatePortalService;

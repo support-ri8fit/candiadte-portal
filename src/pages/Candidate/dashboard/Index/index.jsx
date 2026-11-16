@@ -21,7 +21,8 @@ import ProfileCompletionCard from "../ProfileCompletion/ProfileCompletionCard";
 import ProfileCompletionDrawer from "../ProfileCompletion/ProfileCompletionDrawer";
 import useProfileCompletion from "../ProfileCompletion/useProfileCompletion";
 import { sectionForFieldKey } from "../ProfileCompletion/profileCompletionConfig";
-
+import CareerProfileSection from "../CareerProfile/CareerProfileSection";
+import ReferencesSection from "../References/ReferencesSection";
 const StyledPaper = styled(Paper)(({ theme }) => ({
   borderRadius: 8,
   boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
@@ -43,6 +44,8 @@ const SECTION_CONFIG = [
   { id: "education", label: "Education", completed: false },
   { id: "certifications", label: "Certifications", completed: false },
   { id: "personal", label: "Personal Details", completed: false },
+  { id: "careerProfile", label: "Career Profile", completed: false },
+  { id: "references", label: "References", completed: false },
 ];
 
 const ProfileSections = memo(function ProfileSections({
@@ -96,6 +99,14 @@ const ProfileSections = memo(function ProfileSections({
 
       <div ref={(el) => (sectionRefs.current.personal = el)}>
         <Personaldetails onSectionComplete={handleSectionComplete} />
+      </div>
+            <Box sx={{ my: { xs: 0, sm: 1, md: 2 } }} />
+      <div ref={(el) => (sectionRefs.current.careerProfile = el)}>
+        <CareerProfileSection onSectionComplete={handleSectionComplete} />
+      </div>
+      <Box sx={{ my: { xs: 0, sm: 1, md: 2 } }} />
+      <div ref={(el) => (sectionRefs.current.references = el)}>
+        <ReferencesSection onSectionComplete={handleSectionComplete} />
       </div>
     </Box>
   );

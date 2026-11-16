@@ -5,9 +5,13 @@ import {
   Chip,
   Button,
   Skeleton,
-  Autocomplete,
-  TextField,
+  Select,
+  MenuItem,
 } from "@mui/material";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import WorkOutlineRoundedIcon from "@mui/icons-material/WorkOutlineRounded";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import BusinessRoundedIcon from "@mui/icons-material/BusinessRounded";
@@ -31,31 +35,252 @@ const WARN_TINT = "#FBF3E4";
 
 const FONT_DISPLAY = "'Georgia', 'Times New Roman', serif";
 
-const fieldSx = {
-  "& .MuiOutlinedInput-root": {
-    borderRadius: "10px",
-    background: "#fff",
-    fontSize: "14px",
-    "& fieldset": { borderColor: BORDER },
-    "&:hover fieldset": { borderColor: PRIMARY },
-    "&.Mui-focused fieldset": { borderColor: PRIMARY, borderWidth: "1.5px" },
-  },
-  "& .MuiInputLabel-root": { fontSize: "13.5px", color: TEXT_MUTED },
-  "& .MuiInputLabel-root.Mui-focused": { color: PRIMARY },
-};
+/* ── Small flag icons (SVG, so they look the same on Windows, Mac and phones —
+      Windows doesn't draw emoji flags) ───────────────────────────────── */
+const FlagFrame = ({ children, size = 20 }) => (
+  <Box
+    component="span"
+    sx={{
+      width: size,
+      height: Math.round(size * 0.7),
+      borderRadius: "3px",
+      overflow: "hidden",
+      display: "inline-flex",
+      flexShrink: 0,
+      boxShadow: "0 0 0 1px rgba(31,41,55,0.12)",
+      "& svg": { width: "100%", height: "100%", display: "block" },
+    }}
+  >
+    {children}
+  </Box>
+);
 
-// Global country filter options. Values sent to the API are lowercased by
-// the api slice itself, so display labels here can stay properly cased.
+const IndiaFlag = ({ size }) => (
+  <FlagFrame size={size}>
+    <svg viewBox="0 0 30 21" aria-hidden="true">
+      <rect width="30" height="7" fill="#FF9933" />
+      <rect y="7" width="30" height="7" fill="#FFFFFF" />
+      <rect y="14" width="30" height="7" fill="#138808" />
+      <circle cx="15" cy="10.5" r="2.6" fill="none" stroke="#000080" strokeWidth="0.7" />
+      <circle cx="15" cy="10.5" r="0.6" fill="#000080" />
+    </svg>
+  </FlagFrame>
+);
+
+const USFlag = ({ size }) => (
+  <FlagFrame size={size}>
+    <svg viewBox="0 0 30 21" aria-hidden="true">
+      <rect width="30" height="21" fill="#B22234" />
+      {[1, 3, 5, 7, 9, 11].map((i) => (
+        <rect key={i} y={(i * 21) / 13} width="30" height={21 / 13} fill="#FFFFFF" />
+      ))}
+      <rect width="12.5" height={(21 * 7) / 13} fill="#3C3B6E" />
+      {[0, 1, 2].map((r) =>
+        [0, 1, 2, 3].map((c) => (
+          <circle key={`${r}-${c}`} cx={2 + c * 2.8} cy={2.2 + r * 3.2} r="0.55" fill="#FFFFFF" />
+        ))
+      )}
+    </svg>
+  </FlagFrame>
+);
+
+// Global country filter options. `value` is what goes to the API (the api
+// slice lowercases it); `label` is what the candidate sees.
 const COUNTRY_OPTIONS = [
-  "India",
-  "US",
-  // "UK",
-  // "Canada",
-  // "Australia",
-  // "Germany",
-  // "France",
-  // "Singapore",
+  { value: "India", label: "India", Flag: IndiaFlag },
+  { value: "US", label: "United States", Flag: USFlag },
+  // add more here, e.g. { value: "UK", label: "United Kingdom", Flag: UKFlag },
 ];
+
+const countryOf = (value) => COUNTRY_OPTIONS.find((c) => c.value === value) || COUNTRY_OPTIONS[0];
+
+/* ── Country picker ───────────────────────────────────────────────────── */
+const CountrySelect = ({ value, onChange }) => (
+  <Select
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    size="small"
+    inputProps={{ "aria-label": "Country" }}
+    IconComponent={KeyboardArrowDownRoundedIcon}
+    renderValue={(v) => {
+      const c = countryOf(v);
+      return (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <c.Flag size={20} />
+          <Typography component="span" sx={{ fontSize: 13.5, fontWeight: 500, color: INK }}>
+            {c.label}
+          </Typography>
+        </Box>
+      );
+    }}
+    MenuProps={{
+      anchorOrigin: { vertical: "bottom", horizontal: "right" },
+      transformOrigin: { vertical: "top", horizontal: "right" },
+      PaperProps: {
+        sx: {
+          mt: 0.75,
+          borderRadius: "12px",
+          border: `1px solid ${BORDER}`,
+          boxShadow: "0 10px 28px rgba(31,41,55,0.10)",
+          minWidth: 200,
+          "& .MuiList-root": { p: 0.75 },
+        },
+      },
+    }}
+    sx={{
+      width: { xs: "100%", sm: 200 },
+      height: 40,
+      borderRadius: "10px",
+      bgcolor: "#fff",
+      fontSize: 13.5,
+      "& .MuiOutlinedInput-notchedOutline": { borderColor: BORDER },
+      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY },
+      "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY, borderWidth: "1.5px" },
+      "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 0, pl: 1.5 },
+      "& .MuiSelect-icon": { color: TEXT_MUTED, fontSize: 20 },
+      // 16px on touch screens stops iOS zooming in
+      "@media (pointer: coarse)": { height: 44 },
+    }}
+  >
+    {COUNTRY_OPTIONS.map((c) => {
+      const selected = c.value === value;
+      return (
+        <MenuItem
+          key={c.value}
+          value={c.value}
+          sx={{
+            borderRadius: "8px",
+            gap: 1.25,
+            py: 1,
+            fontSize: 13.5,
+            fontWeight: selected ? 600 : 500,
+            color: selected ? PRIMARY_DARK : INK,
+            "&:hover, &.Mui-focusVisible": { bgcolor: SURFACE },
+            "&.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible": { bgcolor: PRIMARY_TINT },
+          }}
+        >
+          <c.Flag size={22} />
+          <Box component="span" sx={{ flex: 1 }}>
+            {c.label}
+          </Box>
+          {selected && <CheckRoundedIcon sx={{ fontSize: 18, color: PRIMARY }} />}
+        </MenuItem>
+      );
+    })}
+  </Select>
+);
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+const EmptyJobs = ({ country, onSwitchCountry, onRefresh, refreshing }) => {
+  const current = countryOf(country);
+  const others = COUNTRY_OPTIONS.filter((c) => c.value !== country);
+  return (
+    <Box
+      sx={{
+        bgcolor: "#fff",
+        border: `1px dashed ${BORDER}`,
+        borderRadius: "14px",
+        px: { xs: 2.5, sm: 4 },
+        py: { xs: 4, sm: 5.5 },
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        textAlign: "center",
+      }}
+    >
+      <Box sx={{ position: "relative", mb: 2 }}>
+        <Box
+          sx={{
+            width: 64,
+            height: 64,
+            borderRadius: "50%",
+            bgcolor: PRIMARY_TINT,
+            color: PRIMARY,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <WorkOutlineRoundedIcon sx={{ fontSize: 30 }} />
+        </Box>
+        <Box
+          sx={{
+            position: "absolute",
+            right: -4,
+            bottom: 2,
+            p: "3px",
+            bgcolor: "#fff",
+            borderRadius: "5px",
+            display: "flex",
+            boxShadow: "0 2px 6px rgba(31,41,55,0.12)",
+          }}
+        >
+          <current.Flag size={20} />
+        </Box>
+      </Box>
+
+      <Typography sx={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, color: INK }}>
+        No open jobs in {current.label} yet
+      </Typography>
+      <Typography sx={{ fontSize: 13, color: TEXT_MUTED, mt: 0.75, maxWidth: 420, lineHeight: 1.6 }}>
+        New roles that match your profile will show up here as soon as they're posted. Keeping your skills
+        and experience up to date helps us find better matches.
+      </Typography>
+
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 1,
+          mt: 2.5,
+          width: { xs: "100%", sm: "auto" },
+          "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
+        }}
+      >
+        {others.map((c) => (
+          <Button
+            key={c.value}
+            onClick={() => onSwitchCountry(c.value)}
+            startIcon={<c.Flag size={18} />}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: 13,
+              borderRadius: "10px",
+              px: 2,
+              minHeight: 38,
+              color: "#fff",
+              bgcolor: PRIMARY,
+              "&:hover": { bgcolor: PRIMARY_DARK },
+            }}
+          >
+            See jobs in {c.label}
+          </Button>
+        ))}
+        <Button
+          onClick={onRefresh}
+          disabled={refreshing}
+          startIcon={<RefreshRoundedIcon sx={{ fontSize: 18 }} />}
+          sx={{
+            textTransform: "none",
+            fontWeight: 600,
+            fontSize: 13,
+            borderRadius: "10px",
+            px: 2,
+            minHeight: 38,
+            color: PRIMARY_DARK,
+            border: `1px solid ${BORDER}`,
+            bgcolor: "#fff",
+            "&:hover": { bgcolor: PRIMARY_TINT, borderColor: PRIMARY },
+          }}
+        >
+          {refreshing ? "Checking…" : "Check again"}
+        </Button>
+      </Box>
+    </Box>
+  );
+};
 
 const formatDate = (iso) => {
   if (!iso) return "—";
@@ -318,23 +543,15 @@ const CandidateRequisitions = () => {
               Relevant Jobs 
             </Typography>
             <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED, mt: 0.25 }}>
-              {isFetching ? "Refreshing…" : `${jobs.length} open role${jobs.length === 1 ? "" : "s"} in ${country}`}
+              {isFetching
+                ? "Refreshing…"
+                : `${jobs.length} open role${jobs.length === 1 ? "" : "s"} in ${countryOf(country).label}`}
             </Typography>
           </Box>
         </Box>
 
         {/* Global country filter — changing this re-queries the API with the new country */}
-        <Autocomplete
-          disableClearable
-          options={COUNTRY_OPTIONS}
-          value={country}
-          onChange={(_e, value) => value && setCountry(value)}
-          size="small"
-          sx={{ width: { xs: "100%", sm: 220 } }}
-          renderInput={(params) => (
-            <TextField {...params} label="Country" sx={fieldSx} />
-          )}
-        />
+        <CountrySelect value={country} onChange={setCountry} />
       </Box>
 
       {/* ── Loading state ──────────────────────────────────────────────── */}
@@ -363,9 +580,12 @@ const CandidateRequisitions = () => {
 
       {/* ── Empty state ────────────────────────────────────────────────── */}
       {!isLoading && !isError && jobs.length === 0 && (
-        <Typography sx={{ fontSize: 13.5, color: TEXT_MUTED }}>
-          No open Jobs found for {country} right now.
-        </Typography>
+        <EmptyJobs
+          country={country}
+          onSwitchCountry={setCountry}
+          onRefresh={() => refetch()}
+          refreshing={isFetching}
+        />
       )}
 
       {/* ── Job cards ──────────────────────────────────────────────────── */}

@@ -48,7 +48,7 @@ import {
   useLazyGetWorkAuthorizationsQuery,
 } from "../../../../store/api/settings/CandidatePortalApis";
 import { palette, fonts } from "../../../../theme/candidateTokens";
-
+import EmergencyContact from "./EmergencyContact";
 const genders = ["Male", "Female", "Other"];
 const maritalOptions = ["Married", "Single", "Divorced", "Other"];
 /* Languages — most common for our candidates first, then A–Z.
@@ -1062,6 +1062,10 @@ function Personaldetails({ onSectionComplete }) {
         </Box>
       )}
 
+      {/* ── Emergency contact (its own Add / Edit) ───────────────────── */}
+      <Divider sx={{ my: 2, borderColor: palette.line }} />
+      <EmergencyContact />
+
       {/* Add Personal Details Dialog */}
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: "14px" } }}>
         <DialogTitle sx={{ fontFamily: fonts.display, fontWeight: 600, color: palette.ink }}>
@@ -1371,4 +1375,4 @@ function Personaldetails({ onSectionComplete }) {
   );
 }
 
-export default React.memo(Personaldetails);
+export default React.memo(Personaldetails); 

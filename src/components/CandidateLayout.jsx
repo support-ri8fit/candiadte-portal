@@ -15,6 +15,8 @@ import {
   useMediaQuery,
   useTheme,
   Badge,
+  Backdrop,
+  CircularProgress,
 } from "@mui/material";
 import { Outlet, useLocation, useNavigate, Link as RouterLink } from "react-router-dom";
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -41,6 +43,7 @@ import AnalyticsOutlinedIcon from "@mui/icons-material/AnalyticsOutlined";
 import { useSelector } from "react-redux";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import { useCandidateLogoutMutation } from "../store/api/settings/CandidatePortalApis";
 /* ── Candidate display name ───────────────────────────────────────────────
    The name can sit in different places depending on how the user got here
    (login response, register / resume data, old localStorage) — use the
@@ -137,6 +140,8 @@ function CandidateLayout() {
   // (GET /candidate/profile/specific-details → data.full_name).
   // Fetch once on layout mount to avoid route-switch refetch churn.
   const [profileDetails, setProfileDetails] = useState(null);
+  const [candidateLogout] = useCandidateLogoutMutation();
+  const [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => {
     let active = true;
     const token = getItem(CANDIDATE_ACCESS_TOKEN) || getItem(ACCESS_TOKEN);
@@ -360,12 +365,25 @@ const currentLabel = currentItem?.label || "Page";
     return button;
   };
 
-  const handleLogout = () => {
-    clearCandidateAuth();          // removes all candidate auth keys
-    candidateClearLocalStorage();  // existing helper, kept for anything else it clears
-    // Full reload (same as employer side) so Redux + RTK Query cache from the
-    // previous user is wiped. replace() also stops Back from returning here.
-    window.location.replace("/for-candidate/login");
+  // Logout: tell the backend (GET /auth/candidate/logout), then always clear local auth
+  const handleLogout = async () => {
+    if (loggingOut) return; // ignore double clicks
+    setLoggingOut(true);
+    try {
+      // Tell the backend, but never wait more than 5 seconds
+      await Promise.race([
+        candidateLogout().unwrap(),
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ]);
+    } catch (err) {
+      // Even if the API fails (offline, token expired), still log out locally
+      console.warn("Logout API failed — signing out locally", err);
+    } finally {
+      clearCandidateAuth();          // removes all candidate auth keys
+      candidateClearLocalStorage();  // existing helper
+      // Full reload wipes Redux + RTK Query cache; replace() stops Back returning here
+      window.location.replace("/for-candidate/login");
+    }
   };
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: palette.bg || "#f7f9fa" }}>
@@ -677,6 +695,14 @@ const currentLabel = currentItem?.label || "Page";
           <Outlet />
         </Box>
       </Box>
+      {/* "Signing you out…" overlay while the logout API runs */}
+      <Backdrop
+        open={loggingOut}
+        sx={{ zIndex: (t) => t.zIndex.modal + 1, color: "#fff", flexDirection: "column", gap: 1.5 }}
+      >
+        <CircularProgress color="inherit" size={32} />
+        <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Signing you out…</Typography>
+      </Backdrop>
     </Box>
   );
 }

@@ -12,6 +12,8 @@ import {
   Paper,
   Grid,
   Divider,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -25,11 +27,14 @@ import ApartmentOutlinedIcon from "@mui/icons-material/ApartmentOutlined";
 import EventOutlinedIcon from "@mui/icons-material/EventOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 
 import { useDispatch } from "react-redux";
 import { format, isValid, parse } from "date-fns";
 
 import candidateApi from "../../../../services/candidateApi";
+import { viewCertificate } from "../../../../utils/viewCertificate";
+import { toast } from "react-toastify";
 import { candidateUpdateFormData } from "../../../../store/slices/candidateSlice";
 import { palette, fonts } from "../../../../theme/candidateTokens";
 
@@ -73,13 +78,13 @@ const toPickerDate = (value) => {
   return isValid(d) ? d : null;
 };
 
-const DetailRow = ({ icon, label, value }) => (
+const DetailRow = ({ icon, label, value, onClick }) => (
   <Box
     sx={{
       display: "flex",
       alignItems: "center",
       gap: 1.25,
-      mb: 1.4,
+      mt: 1,
     }}
   >
     <Box
@@ -96,7 +101,7 @@ const DetailRow = ({ icon, label, value }) => (
       sx={{
         fontSize: 12,
         color: palette.muted,
-        width: 140,
+        width: { xs: 84, sm: 120 },
         flexShrink: 0,
       }}
     >
@@ -104,9 +109,15 @@ const DetailRow = ({ icon, label, value }) => (
     </Typography>
 
     <Typography
+      onClick={onClick}
       sx={{
-        fontSize: 13.5,
-        color: palette.ink,
+        fontSize: { xs: 12.5, sm: 13.5 },
+        color: onClick ? palette.teal : palette.ink,
+        fontWeight: onClick ? 600 : 400,
+        minWidth: 0,
+        overflowWrap: "anywhere",
+        cursor: onClick ? "pointer" : "default",
+        "@media (hover: hover)": onClick ? { "&:hover": { textDecoration: "underline" } } : {},
       }}
     >
       {value || "—"}
@@ -139,6 +150,9 @@ function CertificationSection({
   });
 
   const [errors, setErrors] = useState({});
+
+  // id of the certificate currently being opened (shows a spinner on its View icon)
+  const [viewingId, setViewingId] = useState(null);
 
 
   // =========================================================
@@ -534,6 +548,23 @@ function CertificationSection({
 
 
   // =========================================================
+  // VIEW CERTIFICATE  (GET /candidate/view-certificate/{cert_id}/)
+  // =========================================================
+
+  const handleView = async (cert) => {
+    if (!cert?.id || viewingId) return;
+    setViewingId(cert.id);
+    try {
+      await viewCertificate(cert.id, cert.file?.url);
+    } catch (viewError) {
+      toast.error(viewError.message);
+    } finally {
+      setViewingId(null);
+    }
+  };
+
+
+  // =========================================================
   // DISPLAY DATE
   // =========================================================
 
@@ -720,150 +751,115 @@ function CertificationSection({
           </Button>
         </Box>
       ) : (
-        <Box sx={{ mt: 2.5 }}>
-          {certifications.map(
-            (cert, index) => (
+        <Box>
+          {certifications.map((cert, index) => (
+            <Box
+              key={cert.id || `certification-${index}`}
+              sx={{
+                mt: 2,
+                p: 2.25,
+                position: "relative",
+                border: `1px solid ${palette.line}`,
+                borderRadius: "10px",
+                "&:hover": { borderColor: palette.teal },
+              }}
+            >
+              {/* =========================================
+                  ACTION BUTTONS (top-right, same as Education)
+              ========================================== */}
               <Box
-                key={
-                  cert.id ||
-                  `certification-${index}`
-                }
                 sx={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
                   display: "flex",
-                  justifyContent:
-                    "space-between",
-                  alignItems:
-                    "flex-start",
-                  py: 1.75,
-                  borderBottom:
-                    index <
-                    certifications.length - 1
-                      ? `1px solid ${palette.line}`
-                      : "none",
+                  gap: 0.5,
                 }}
               >
-                {/* =========================================
-                    CERTIFICATION DETAILS
-                ========================================== */}
-
-                <Box sx={{ flex: 1 }}>
-                  <Typography
-                    sx={{
-                      fontFamily:
-                        fonts.display,
-                      fontWeight: 600,
-                      fontSize: 14.5,
-                      color: palette.ink,
-                      mb: 1,
-                    }}
-                  >
-                    {cert.name || "—"}
-                  </Typography>
-
-                  <DetailRow
-                    icon={
-                      <ApartmentOutlinedIcon
-                        sx={{ fontSize: 18 }}
-                      />
-                    }
-                    label="Issued By"
-                    value={
-                      cert.organization
-                    }
-                  />
-
-                  <DetailRow
-                    icon={
-                      <EventOutlinedIcon
-                        sx={{ fontSize: 18 }}
-                      />
-                    }
-                    label="Issue Date"
-                    value={displayDate(
-                      cert.issueDate
-                    )}
-                  />
-
-                  {cert.expiryDate && (
-                    <DetailRow
-                      icon={
-                        <EventOutlinedIcon
-                          sx={{ fontSize: 18 }}
-                        />
-                      }
-                      label="Expiry Date"
-                      value={displayDate(
-                        cert.expiryDate
-                      )}
-                    />
-                  )}
-
-                  {cert.file && (
-                    <DetailRow
-                      icon={
-                        <InsertDriveFileOutlinedIcon
-                          sx={{ fontSize: 18 }}
-                        />
-                      }
-                      label="File"
-                      value={
-                        cert.file.name
-                      }
-                    />
-                  )}
-                </Box>
-
-
-                {/* =========================================
-                    ACTION BUTTONS
-                ========================================== */}
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexShrink: 0,
-                  }}
+                {cert.file && (
+                  <Tooltip title={viewingId === cert.id ? "Opening…" : "View certificate"} arrow>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleView(cert)}
+                        aria-label="View certificate"
+                        disabled={isLoading || viewingId === cert.id}
+                        sx={{ color: palette.teal }}
+                      >
+                        {viewingId === cert.id ? (
+                          <CircularProgress size={16} sx={{ color: palette.teal }} />
+                        ) : (
+                          <VisibilityOutlinedIcon fontSize="small" />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpen(cert, index)}
+                  aria-label="Edit certification"
+                  disabled={isLoading}
+                  sx={{ color: palette.teal }}
                 >
-                  <IconButton
-                    onClick={() =>
-                      handleOpen(
-                        cert,
-                        index
-                      )
-                    }
-                    aria-label="Edit certification"
-                    disabled={isLoading}
-                    sx={{
-                      color: palette.teal,
-                    }}
-                  >
-                    <EditIcon
-                      sx={{
-                        fontSize: 19,
-                      }}
-                    />
-                  </IconButton>
-
-                  <IconButton
-                    onClick={() =>
-                      handleDelete(index)
-                    }
-                    aria-label="Delete certification"
-                    disabled={isLoading}
-                    sx={{
-                      color: palette.coral,
-                    }}
-                  >
-                    <DeleteOutlineIcon
-                      sx={{
-                        fontSize: 19,
-                      }}
-                    />
-                  </IconButton>
-                </Box>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => handleDelete(index)}
+                  aria-label="Delete certification"
+                  disabled={isLoading}
+                  sx={{ color: palette.coral }}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
               </Box>
-            )
-          )}
+
+              {/* =========================================
+                  CERTIFICATION DETAILS
+              ========================================== */}
+              <Typography
+                sx={{
+                  fontSize: { xs: 13, sm: 15 },
+                  fontWeight: 600,
+                  color: palette.ink,
+                  pr: cert.file ? 13 : 9, // keep the name clear of the view / edit / delete icons
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {cert.name || "—"}
+              </Typography>
+
+              <DetailRow
+                icon={<ApartmentOutlinedIcon sx={{ fontSize: 18 }} />}
+                label="Issued By"
+                value={cert.organization}
+              />
+
+              <DetailRow
+                icon={<EventOutlinedIcon sx={{ fontSize: 18 }} />}
+                label="Issue Date"
+                value={displayDate(cert.issueDate)}
+              />
+
+              {cert.expiryDate && (
+                <DetailRow
+                  icon={<EventOutlinedIcon sx={{ fontSize: 18 }} />}
+                  label="Expiry Date"
+                  value={displayDate(cert.expiryDate)}
+                />
+              )}
+
+              {cert.file && (
+                <DetailRow
+                  icon={<InsertDriveFileOutlinedIcon sx={{ fontSize: 18 }} />}
+                  label="File"
+                  value={cert.file.name}
+                  onClick={() => handleView(cert)}
+                />
+              )}
+            </Box>
+          ))}
         </Box>
       )}
 

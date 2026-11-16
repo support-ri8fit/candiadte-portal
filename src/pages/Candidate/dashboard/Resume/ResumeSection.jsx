@@ -12,6 +12,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
@@ -25,6 +26,7 @@ import {
   useReplaceCandidateResumeMutation,
 } from "../../../../store/api/settings/CandidatePortalApis";
 import { candidateUpdateFormData } from "../../../../store/slices/candidateSlice";
+import { downloadResume, downloadErrorMessage } from "../../../../utils/downloadResume";
 
 const ACCENT = "#2B6F71";
 const ACCENT_HOVER = "#1F5557";
@@ -81,6 +83,7 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
   const [error, setError] = useState("");
   const [pendingFile, setPendingFile] = useState(null); // file waiting for "Replace" confirm
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const inputRef = useRef(null);
   const { data: resumeData } = useGetCandidateResumeQuery();
   const [uploadResume, { isLoading: isUploading }] = useReplaceCandidateResumeMutation();
@@ -161,13 +164,31 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
     setConfirmDelete(false);
   }, [dispatch]);
 
-  const handleDownload = useCallback(() => {
+  // Click on the file name → open it in a new tab to view
+  const handleView = useCallback(() => {
     if (!resumeUrl) {
       setError("Resume link not found. Please refresh and try again.");
       return;
     }
     window.open(resumeUrl, "_blank", "noopener");
   }, [resumeUrl]);
+
+  // Download button → GET /candidate/resume_download/
+  const handleDownload = useCallback(async () => {
+    if (downloading) return;
+    setError("");
+    setDownloading(true);
+    try {
+      await downloadResume(resumeFileName || "Resume");
+      toast.success("Resume downloaded");
+    } catch (err) {
+      const message = (await downloadErrorMessage(err)) || "Couldn't download your resume. Please try again.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDownloading(false);
+    }
+  }, [downloading, resumeFileName]);
 
   return (
     <Box
@@ -214,7 +235,7 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Tooltip title={resumeFileName} arrow placement="top-start">
                 <Typography
-                  onClick={handleDownload}
+                  onClick={handleView}
                   sx={{
                     fontSize: { xs: 13.5, sm: 14 },
                     fontWeight: 600,
@@ -251,8 +272,21 @@ function ResumeSection({ resumeInfo, onSectionComplete }) {
             </Box>
 
             <Box sx={{ display: "flex", gap: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
-              <ActionButton title="Download" onClick={handleDownload} color={ACCENT} hoverBg={ACCENT_TINT}>
-                <FileDownloadOutlinedIcon fontSize="small" />
+              <ActionButton title="View" onClick={handleView} color={ACCENT} hoverBg={ACCENT_TINT}>
+                <VisibilityOutlinedIcon fontSize="small" />
+              </ActionButton>
+              <ActionButton
+                title={downloading ? "Downloading…" : "Download"}
+                onClick={handleDownload}
+                disabled={downloading || isBusy}
+                color={ACCENT}
+                hoverBg={ACCENT_TINT}
+              >
+                {downloading ? (
+                  <CircularProgress size={16} sx={{ color: ACCENT }} />
+                ) : (
+                  <FileDownloadOutlinedIcon fontSize="small" />
+                )}
               </ActionButton>
               <ActionButton
                 title="Delete"
