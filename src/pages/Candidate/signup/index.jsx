@@ -163,28 +163,28 @@ const CandidateSignup = () => {
     }
     return () => clearInterval(iv);
   }, [openOtp, canResend]);
-/* handle Google OAuth redirect back into this page */
-useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const access_token = params.get("access_token");
-  const refresh_token = params.get("refresh_token");
-  const is_new_user = params.get("is_new_user");
+  /* handle Google OAuth redirect back into this page */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+    const is_new_user = params.get("is_new_user");
 
-  if (access_token) {
-    setItem(CANDIDATE_ACCESS_TOKEN, access_token);
-    setItem(CANDIDATE_REFRESH_TOKEN, refresh_token);
-    setItem(IS_AUTHENTICATED, JSON.stringify(true));
+    if (access_token) {
+      setItem(CANDIDATE_ACCESS_TOKEN, access_token);
+      setItem(CANDIDATE_REFRESH_TOKEN, refresh_token);
+      setItem(IS_AUTHENTICATED, JSON.stringify(true));
 
-    // strip the tokens out of the visible URL
-    window.history.replaceState({}, document.title, window.location.pathname);
+      // strip the tokens out of the visible URL
+      window.history.replaceState({}, document.title, window.location.pathname);
 
-    navigate(
-      is_new_user === "true"
-        ? "/for-candidate/profile-register"
-        : "/for-candidate/profile"
-    );
-  }
-}, []);
+      navigate(
+        is_new_user === "true"
+          ? "/for-candidate/profile-register"
+          : "/for-candidate/profile",
+      );
+    }
+  }, []);
   /* helpers */
   const formatPhone = (v, code) => {
     const c = v.replace(/[^0-9]/g, "");
@@ -429,7 +429,8 @@ useEffect(() => {
             maxWidth: 340,
           }}
         >
-          Create your profile - discover relevant jobs, track applications, prepare for interviews, and manage offers all from one platform.
+          Create your profile - discover relevant jobs, track applications,
+          prepare for interviews, and manage offers all from one platform.
           opportunities.
         </Typography>
         <Box
@@ -492,7 +493,14 @@ useEffect(() => {
                 textAlign: "center",
               }}
             >
-              <Typography sx={{ fontWeight: 700, fontSize: "20px", mb: 0.5,color:"#1F242F" }}>
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "20px",
+                  mb: 0.5,
+                  color: "#1F242F",
+                }}
+              >
                 Enter OTP
               </Typography>
               <Typography sx={{ fontSize: "13px", color: "#9C9C9C", mb: 2.5 }}>
@@ -521,7 +529,21 @@ useEffect(() => {
                   "& .MuiOutlinedInput-root": {
                     borderRadius: "8px",
                     height: "52px",
+                    background: "#fff",
+                    // teal instead of MUI's default blue
+                    "& fieldset": { borderColor: "#dde1e7" },
+                    "&:hover fieldset": { borderColor: "#2B7B7E" },
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#2B7B7E",
+                      borderWidth: "1.5px",
+                    },
+                    "&.Mui-error fieldset": { borderColor: "#d32f2f" },
                   },
+                  "& .MuiInputBase-input": {
+                    caretColor: "#2B7B7E",
+                    color: "#1F242F",
+                  },
+                  "& .MuiFormHelperText-root": { textAlign: "center", mx: 0 },
                 }}
               />
               <Button
@@ -586,6 +608,12 @@ useEffect(() => {
                 Enter details to create your account
               </Typography> */}
 
+              {/* QR job note — first thing on the form (shows only after a job QR scan) */}
+              <QrJobNotice
+                variant="signup"
+                onSignIn={() => navigate("/for-candidate/login")}
+              />
+
               {/* First + Last */}
               <Box sx={{ display: "flex", gap: 1.2, mb: 1.2 }}>
                 <TextField
@@ -609,7 +637,6 @@ useEffect(() => {
                   sx={fs}
                 />
               </Box>
-              <QrJobNotice variant="signup" onSignIn={() => navigate("/for-candidate/login")} />
               <Box component="form" onSubmit={handleSubmit}>
                 {/* Email */}
                 <TextField
@@ -794,7 +821,7 @@ useEffect(() => {
                           ))}
                         </Select>
                         <Box
-                          sx={{ 
+                          sx={{
                             width: "1px",
                             height: "20px",
                             background: "#dde1e7",
@@ -809,52 +836,52 @@ useEffect(() => {
 
                 {/* Sign Up */}
                 <Button
-  fullWidth
-  type="submit"
-  variant="contained"
-  disableElevation
-  disabled={signupLoading}
-  sx={{
-    background: "#2B7B7E",
-    color: "#fff",
-    fontWeight: 700,
-    borderRadius: "8px",
-    textTransform: "none",
-    fontSize: "15px",
-    py: 1,
-    mb: 1.2,
+                  fullWidth
+                  type="submit"
+                  variant="contained"
+                  disableElevation
+                  disabled={signupLoading}
+                  sx={{
+                    background: "#2B7B7E",
+                    color: "#fff",
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    fontSize: "15px",
+                    py: 1,
+                    mb: 1.2,
 
-    "&:hover": {
-      background: "#235a5c",
-    },
+                    "&:hover": {
+                      background: "#235a5c",
+                    },
 
-    "&.Mui-disabled": {
-      background: "#2B7B7E",
-      color: "#fff",
-      opacity: 0.8,
-    },
-  }}
->
-  {signupLoading ? (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 1,
-      }}
-    >
-      <CircularProgress
-        size={18}
-        thickness={5}
-        sx={{ color: "#fff" }}
-      />
-      Creating account...
-    </Box>
-  ) : (
-    "Sign Up"
-  )}
-</Button>
+                    "&.Mui-disabled": {
+                      background: "#2B7B7E",
+                      color: "#fff",
+                      opacity: 0.8,
+                    },
+                  }}
+                >
+                  {signupLoading ? (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 1,
+                      }}
+                    >
+                      <CircularProgress
+                        size={18}
+                        thickness={5}
+                        sx={{ color: "#fff" }}
+                      />
+                      Creating account...
+                    </Box>
+                  ) : (
+                    "Sign Up"
+                  )}
+                </Button>
               </Box>
 
               {/* Login link */}
@@ -908,35 +935,35 @@ useEffect(() => {
                   Sign up with Google
                 </Button>
                 <Button
-  fullWidth
-  variant="outlined"
-  disabled
-  startIcon={<MicrosoftIcon />}
-  sx={{
-    background: "#fff",
-    border: "1px solid #dde1e7",
-    color: "#374151",
-    textTransform: "none",
-    borderRadius: "8px",
-    fontSize: "13px",
-    fontWeight: 500,
-    py: 0.8,
-    boxShadow: "none",
-    "&:hover": {
-      background: "#f5f7fa",
-      borderColor: "#b0b7c3",
-      boxShadow: "none",
-    },
-    "&.Mui-disabled": {
-      background: "#f9fafb",
-      borderColor: "#e5e7eb",
-      color: "#9ca3af",
-      "& .MuiButton-startIcon": { opacity: 0.5 },
-    },
-  }}
->
-  Sign up with Microsoft
-</Button>
+                  fullWidth
+                  variant="outlined"
+                  disabled
+                  startIcon={<MicrosoftIcon />}
+                  sx={{
+                    background: "#fff",
+                    border: "1px solid #dde1e7",
+                    color: "#374151",
+                    textTransform: "none",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    py: 0.8,
+                    boxShadow: "none",
+                    "&:hover": {
+                      background: "#f5f7fa",
+                      borderColor: "#b0b7c3",
+                      boxShadow: "none",
+                    },
+                    "&.Mui-disabled": {
+                      background: "#f9fafb",
+                      borderColor: "#e5e7eb",
+                      color: "#9ca3af",
+                      "& .MuiButton-startIcon": { opacity: 0.5 },
+                    },
+                  }}
+                >
+                  Sign up with Microsoft
+                </Button>
               </Box>
             </>
           )}

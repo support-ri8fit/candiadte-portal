@@ -993,13 +993,19 @@ const CandidateProfile = () => {
             </Box>
           </Box>
 
-          {/* ── Job Preferences ──────────────────────────────────────────── */}
+          {/* ── Job Preferences ──────────────────────────────────────────────
+              QR registration: domain / role come from the job, so there is no
+              "Job Preferences" heading — only Availability stays (experienced).
+              QR + fresher: nothing to ask here, so the whole block is hidden. */}
+          {(!isQrRegistration || !isFresherSelected) && (
           <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
-            <SectionHeader
-              icon={<TuneIcon sx={{ fontSize: 17 }} />}
-              title="Job Preferences"
-              hint="Helps us match relevant roles"
-            />
+            {!isQrRegistration && (
+              <SectionHeader
+                icon={<TuneIcon sx={{ fontSize: 17 }} />}
+                title="Job Preferences"
+                hint="Helps us match relevant roles"
+              />
+            )}
 
             <Box
               sx={{
@@ -1172,6 +1178,7 @@ const CandidateProfile = () => {
               )}
             </Box>
           </Box>
+          )}
 
           {/* ── Resume section ───────────────────────────────────────────── */}
           <Box sx={{ mb: { xs: 1, sm: 1.5 } }}>

@@ -24,52 +24,184 @@ import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import NotesOutlinedIcon from "@mui/icons-material/NotesOutlined";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import LinkedInIcon from "@mui/icons-material/LinkedIn";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
+import EventAvailableOutlinedIcon from "@mui/icons-material/EventAvailableOutlined";
+import UpdateRoundedIcon from "@mui/icons-material/UpdateRounded";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { AppContext } from "../../../../AppContext";
 import {
   useGetCandidateProfileImageQuery,
   useUploadCandidateProfileImageMutation,
   useUpdateCandidateProfileDetailsMutation,
   useGetCandidateSpecificDetailsQuery,
+  useGetPersonalDetailsQuery,
+  useUpdatePersonalDetailsMutation,
 } from "../../../../store/api/settings/CandidatePortalApis";
 import { GridCloseIcon } from "@mui/x-data-grid";
 import { EmailOutlined } from "@mui/icons-material";
 import { palette, fonts } from "../../../../theme/candidateTokens";
 
-// Small reusable row for the info grid.
-// verified → teal badge · onVerify (and not verified) → underlined "Verify" link
-const InfoRow = ({ icon, children, verified, onVerify }) => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mb: 1.4, flexWrap: "wrap" }}>
+/* ── LinkedIn helpers ─────────────────────────────────────────────────────
+   LinkedIn is saved with Personal Details (linkedin_url on
+   PUT /candidates/update-personal-details). */
+const normalizeLinkedIn = (v) => {
+  const t = String(v || "").trim();
+  if (!t) return "";
+  return /^https?:\/\//i.test(t) ? t : `https://${t.replace(/^\/+/, "")}`;
+};
+const isLinkedInUrl = (v) =>
+  /^https?:\/\/([a-z]{2,3}\.)?(www\.)?linkedin\.com\/(in|pub|company)\/[^\s/]+/i.test(normalizeLinkedIn(v));
+/* "https://www.linkedin.com/in/arpit-c/" → "linkedin.com/in/arpit-c" */
+const shortLinkedIn = (v) =>
+  normalizeLinkedIn(v)
+    .replace(/^https?:\/\/(www\.)?/i, "")
+    .replace(/\/+$/, "");
+
+/* Personal-details fields the update API accepts — sent back unchanged so
+   saving the LinkedIn link never clears the rest of Personal Details. */
+const PERSONAL_FIELDS = [
+  "date_of_birth", "gender", "marital_status", "nationality", "languages_known", "address",
+  "present_address", "preferred_salary", "work_authorizations", "city", "state", "country",
+  "pincode", "willing_to_relocate", "linkedin_url", "preferred_contact_methods",
+  "preferred_employment_types", "preferred_engagement_types", "preferred_work_arrangements",
+  "current_us_work_authorizations", "important_w2_benefits", "most_important_opportunity_factors",
+  "preferred_interview_days", "preferred_job_categories", "preferred_seniority_levels",
+  "preferred_company_types", "location_preference", "employer_sponsorship",
+  "authorization_expiration_date", "compensation_basis", "rate_dependent_on_benefits",
+  "current_employment_status", "current_time_zone", "preferred_us_time_zone", "preferred_shift",
+  "current_job_search_status", "preferred_interview_time", "interview_time_zone",
+  "interview_preference", "referral_source", "referral_source_details",
+];
+const DATE_FIELDS = ["date_of_birth", "authorization_expiration_date"];
+
+/* "+919398420112" → "+91 93984 20112" (leaves anything else as it is) */
+const formatPhone = (p) => {
+  const t = String(p || "").replace(/\s+/g, "");
+  const m = t.match(/^\+91(\d{5})(\d{5})$/);
+  if (m) return `+91 ${m[1]} ${m[2]}`;
+  const us = t.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
+  if (us) return `+1 ${us[1]}-${us[2]}-${us[3]}`;
+  return p || "";
+};
+
+/* One small stat tile: icon · label · value */
+const StatTile = ({ icon, label, value }) => (
+  <Box
+    sx={{
+      display: "flex",
+      flexDirection: { xs: "column", sm: "row" },
+      alignItems: { xs: "flex-start", sm: "center" },
+      gap: { xs: 0.75, sm: 1.25 },
+      p: { xs: 1.25, sm: 1.5 },
+      borderRadius: "12px",
+      border: `1px solid ${palette.line}`,
+      bgcolor: "#FAFCFB",
+      minWidth: 0,
+    }}
+  >
+    <Box
+      sx={{
+        width: { xs: 30, sm: 34 },
+        height: { xs: 30, sm: 34 },
+        borderRadius: "10px",
+        bgcolor: palette.tealSoft,
+        color: palette.teal,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      {icon}
+    </Box>
+    <Box sx={{ minWidth: 0, width: "100%" }}>
+      <Typography
+        sx={{
+          fontSize: { xs: 10.5, sm: 11 },
+          color: palette.muted,
+          letterSpacing: 0.3,
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: { xs: 13.5, sm: 14.5 },
+          fontWeight: 700,
+          color: palette.ink,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+        title={typeof value === "string" ? value : undefined}
+      >
+        {value || "—"}
+      </Typography>
+    </Box>
+  </Box>
+);
+
+/* One contact line: icon · value · badge / action */
+const ContactRow = ({ icon, children, href, verified, action }) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, py: 0.5 }}>
     <Box sx={{ color: palette.teal, display: "flex", flexShrink: 0 }}>{icon}</Box>
-    <Typography sx={{ fontSize: 13.5, color: palette.ink }}>{children}</Typography>
-    {verified ? (
+    <Typography
+      component={href ? "a" : "span"}
+      href={href}
+      target={href ? "_blank" : undefined}
+      rel={href ? "noopener noreferrer" : undefined}
+      sx={{
+        fontSize: 13.5,
+        color: href ? palette.teal : palette.ink,
+        fontWeight: href ? 600 : 400,
+        textDecoration: "none",
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        "&:hover": href ? { textDecoration: "underline", textUnderlineOffset: "3px" } : {},
+      }}
+    >
+      {children}
+    </Typography>
+    {verified && (
       <Tooltip title="Verified" arrow>
-        <Verified fontSize="small" sx={{ color: palette.teal, ml: 0.3 }} />
+        <Verified sx={{ fontSize: 17, color: palette.teal, flexShrink: 0 }} />
       </Tooltip>
-    ) : (
-      onVerify && (
-        <Box
-          component="button"
-          type="button"
-          onClick={onVerify}
-          sx={{
-            border: "none",
-            background: "none",
-            p: 0,
-            ml: 0.5,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: 13,
-            fontWeight: 600,
-            color: palette.amber,
-            textDecoration: "underline",
-            textUnderlineOffset: "3px",
-            "&:hover": { color: palette.teal },
-          }}
-        >
-          Verify
-        </Box>
-      )
     )}
+    {action}
+  </Box>
+);
+
+/* Small underlined text button (Verify / + Add) */
+const LinkAction = ({ children, onClick, color = palette.teal }) => (
+  <Box
+    component="button"
+    type="button"
+    onClick={onClick}
+    sx={{
+      border: "none",
+      background: "none",
+      p: 0,
+      cursor: "pointer",
+      fontFamily: "inherit",
+      fontSize: 13,
+      fontWeight: 700,
+      color,
+      flexShrink: 0,
+      textDecoration: "underline",
+      textUnderlineOffset: "3px",
+      "&:hover": { color: palette.tealDeep },
+    }}
+  >
+    {children}
   </Box>
 );
 
@@ -228,6 +360,26 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
     refetch,
   } = useGetCandidateSpecificDetailsQuery();
 
+  // LinkedIn lives in Personal Details (same cache as the Personal Details card)
+  const { data: personalDetailsData, refetch: refetchPersonalDetails } = useGetPersonalDetailsQuery();
+  const [updatePersonalDetails] = useUpdatePersonalDetailsMutation();
+  const personalSaved = (() => {
+    const d = personalDetailsData?.data ?? personalDetailsData;
+    return Array.isArray(d) ? d[0] || {} : d || {};
+  })();
+  const savedLinkedIn = personalSaved?.linkedin_url || "";
+  const [linkedinDraft, setLinkedinDraft] = useState("");
+  const [linkedinError, setLinkedinError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const openEditor = () => {
+    setLinkedinDraft(savedLinkedIn);
+    setLinkedinError("");
+    setSaveError("");
+    setOpen(true);
+  };
+
   const getEmployment =
     candidate?.employment?.find((emp) => emp.is_current) ||
     candidate?.employment?.[0] ||
@@ -324,8 +476,34 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
     setBasicInfo({ ...basicInfo, [e.target.name]: e.target.value });
   };
 
+  // Saves LinkedIn through Personal Details, sending every other saved field back as it is
+  const saveLinkedIn = async (url) => {
+    const payload = {};
+    PERSONAL_FIELDS.forEach((k) => {
+      if (personalSaved[k] === undefined) return;
+      let v = personalSaved[k];
+      if (DATE_FIELDS.includes(k) && typeof v === "string" && v.length > 10) v = v.slice(0, 10);
+      payload[k] = v;
+    });
+    payload.linkedin_url = url || null;
+    const res = await updatePersonalDetails(payload).unwrap();
+    if (res?.success === false) throw new Error(res?.message || "Couldn't save the LinkedIn link.");
+    refetchPersonalDetails();
+  };
+
   const handleUpdate = async () => {
+    // LinkedIn: optional, but must be a linkedin.com profile link when filled
+    const cleanLinkedIn = normalizeLinkedIn(linkedinDraft);
+    if (cleanLinkedIn && !isLinkedInUrl(cleanLinkedIn)) {
+      setLinkedinError("Enter a LinkedIn profile link, e.g. linkedin.com/in/your-name");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
     try {
+      if (cleanLinkedIn !== normalizeLinkedIn(savedLinkedIn)) {
+        await saveLinkedIn(cleanLinkedIn);
+      }
       const payload = {
         full_name: basicInfo.full_name,
         employment_id: candidateDetails?.data?.employment_id,
@@ -347,9 +525,19 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
       if (response?.success || response?.status === 200) {
         refetch();
         setOpen(false);
+      } else {
+        setSaveError(response?.message || "Couldn't update your details. Please try again.");
       }
     } catch (error) {
       console.error("Error updating candidate:", error);
+      setSaveError(
+        error?.data?.message ||
+          (typeof error?.data?.detail === "string" ? error.data.detail : "") ||
+          error?.message ||
+          "Couldn't update your details. Please try again."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -403,176 +591,252 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
   }
 };
 
+  /* Values shown in the card */
+  const headline = [basicInfo.designation, basicInfo.company_name].filter(Boolean).join(" at ");
+  const location = [basicInfo.city, basicInfo.country].filter(Boolean).join(", ");
+  const totalExp =
+    candidateDetails?.data?.total_experience?.replace(" years", "y").replace(" months", "m") || "";
+  const rel = candidateDetails?.data?.relevant_experience;
+  const relevantExp = rel ? `${rel.years ?? 0}y ${rel.months ?? 0}m` : "";
+  const notice = Number(basicInfo.notice_period_days);
+  const noticeText =
+    basicInfo.notice_period_days === "" || basicInfo.notice_period_days === null || basicInfo.notice_period_days === undefined
+      ? ""
+      : notice === 0
+      ? "Immediate"
+      : `${notice} days`;
+  const linkedinHref = savedLinkedIn ? normalizeLinkedIn(savedLinkedIn) : "";
+
   return (
     <Paper
       elevation={0}
-      sx={{ border: `1px solid ${palette.line}`, borderRadius: "14px", overflow: "hidden", bgcolor: palette.paper }}
+      sx={{ border: `1px solid ${palette.line}`, borderRadius: "16px", overflow: "hidden", bgcolor: palette.paper }}
     >
-      {/* signature accent strip */}
-      <Box sx={{ height: 6, background: `linear-gradient(90deg, ${palette.teal}, ${palette.tealDeep})` }} />
+      {/* ── Cover band ── */}
+      <Box
+        sx={{
+          height: { xs: 72, sm: 88 },
+          position: "relative",
+          background: `linear-gradient(120deg, ${palette.tealDeep} 0%, ${palette.teal} 60%, #3E9A93 100%)`,
+          // soft dotted texture
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            inset: 0,
+            backgroundImage: "radial-gradient(rgba(255,255,255,0.14) 1px, transparent 1px)",
+            backgroundSize: "14px 14px",
+          },
+        }}
+      >
+        {/* Edit details — top right on the band */}
+        <Button
+          onClick={openEditor}
+          startIcon={<EditOutlinedIcon sx={{ fontSize: 17 }} />}
+          sx={{
+            position: "absolute",
+            top: { xs: 10, sm: 14 },
+            right: { xs: 10, sm: 16 },
+            zIndex: 1,
+            textTransform: "none",
+            fontWeight: 700,
+            fontSize: 13,
+            borderRadius: "10px",
+            px: 1.5,
+            py: 0.5,
+            color: palette.teal,
+            bgcolor: "#fff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+            "&:hover": { bgcolor: "#F2F8F7" },
+          }}
+        >
+          Edit details
+        </Button>
+      </Box>
 
-      <Box sx={{ p: { xs: 2.5, sm: 3.5 } }}>
-        {/* ── Header row: Avatar | Name/Email/Company | Last Updated ── */}
+      <Box sx={{ px: { xs: 2.5, sm: 3.5 }, pb: { xs: 2.5, sm: 3 } }}>
+        {/* ── Avatar (overlapping the band) + name ── */}
         <Box
           sx={{
             display: "flex",
-            alignItems: { xs: "flex-start", sm: "center" },
+            alignItems: "flex-start",
             flexDirection: { xs: "column", sm: "row" },
-            gap: { xs: 2, sm: 3 },
+            gap: { xs: 1.5, sm: 2.5 },
+            mt: { xs: "-44px", sm: "-52px" },
           }}
         >
           <Box sx={{ position: "relative", flexShrink: 0 }}>
             <Avatar
-              src={basicInfo.profile_picture || "path/to/default-image.png"}
+              src={basicInfo.profile_picture || undefined}
               alt={basicInfo.full_name}
               onClick={() => setImageDialogOpen(true)}
               sx={{
-                width: 92,
-                height: 92,
+                width: { xs: 88, sm: 104 },
+                height: { xs: 88, sm: 104 },
                 cursor: "pointer",
                 bgcolor: palette.tealSoft,
                 color: palette.teal,
                 fontFamily: fonts.display,
-                fontSize: 34,
+                fontSize: 36,
                 fontWeight: 600,
-                border: `2px solid ${palette.teal}`,
+                border: "4px solid #fff",
+                boxShadow: "0 4px 14px rgba(14,74,69,0.18)",
               }}
             >
               {(basicInfo.full_name?.[0] || "?").toUpperCase()}
             </Avatar>
-            <IconButton
-              component="label"
-              size="small"
-              sx={{
-                position: "absolute",
-                bottom: -2,
-                right: -2,
-                bgcolor: palette.paper,
-                border: `1px solid ${palette.line}`,
-                width: 30,
-                height: 30,
-                "&:hover": { bgcolor: palette.canvas },
-              }}
-            >
-              <AddAPhotoIcon sx={{ fontSize: 15, color: palette.teal }} />
-              <input
-                type="file"
-                hidden
-                accept="image/png,image/jpeg,image/jpg,image/gif"
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file && validateImageFile(file)) {
-                    const imageUrl = URL.createObjectURL(file);
-                    setBasicInfo((prev) => ({
-                      ...prev,
-                      profile_picture: imageUrl,
-                    }));
-                    handleImageUpload(file);
-                  }
+            <Tooltip title="Change photo" arrow>
+              <IconButton
+                component="label"
+                size="small"
+                aria-label="Change profile photo"
+                sx={{
+                  position: "absolute",
+                  bottom: 2,
+                  right: 2,
+                  bgcolor: palette.teal,
+                  color: "#fff",
+                  border: "2px solid #fff",
+                  width: 30,
+                  height: 30,
+                  "&:hover": { bgcolor: palette.tealDeep },
                 }}
-              />
-            </IconButton>
-          </Box>
-
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography
-                sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: { xs: 22, sm: 26 }, color: palette.ink }}
               >
-                {basicInfo.full_name}
-              </Typography>
-            </Box>
-            <Typography sx={{ fontSize: 14, color: palette.muted, mt: 0.5 }}>{basicInfo.email}</Typography>
-            <Typography sx={{ fontSize: 14, color: palette.muted }}>
-              {basicInfo.designation}
-              {basicInfo.designation && basicInfo.company_name ? " at " : ""}
-              {basicInfo.company_name}
-            </Typography>
+                <AddAPhotoIcon sx={{ fontSize: 15 }} />
+                <input
+                  type="file"
+                  hidden
+                  accept="image/png,image/jpeg,image/jpg,image/gif"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file && validateImageFile(file)) {
+                      const imageUrl = URL.createObjectURL(file);
+                      setBasicInfo((prev) => ({ ...prev, profile_picture: imageUrl }));
+                      handleImageUpload(file);
+                    }
+                  }}
+                />
+              </IconButton>
+            </Tooltip>
           </Box>
 
-          <Box
-            sx={{
-              textAlign: { xs: "left", sm: "right" },
-              flexShrink: 0,
-              alignSelf: { xs: "stretch", sm: "flex-start" },
-              display: "flex",
-              flexDirection: "column",
-              alignItems: { xs: "flex-start", sm: "flex-end" },
-            }}
-          >
-            {/* Edit Details — opens the Edit Information dialog */}
-            <Box
-              component="button"
-              type="button"
-              onClick={() => setOpen(true)}
+          {/* text starts below the band (the avatar alone overlaps it) */}
+          <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: "64px" } }}>
+            <Typography
               sx={{
-                border: "none",
-                background: "none",
-                p: 0,
-                mb: 1.5,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 14,
+                fontFamily: fonts.display,
                 fontWeight: 700,
-                color: palette.teal,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 0.5,
-                "&:hover": { color: palette.tealDeep, textDecoration: "underline", textUnderlineOffset: "3px" },
+                fontSize: { xs: 22, sm: 26 },
+                color: palette.ink,
+                lineHeight: 1.2,
+                overflowWrap: "anywhere",
               }}
             >
-              Edit Details
-            </Box>
-            <Typography sx={{ fontSize: 11, color: palette.muted, letterSpacing: 0.3 }}>LAST UPDATED</Typography>
-            <Typography sx={{ fontFamily: fonts.mono, fontSize: 13, color: palette.ink, mt: 0.25 }}>
-              {lastUpdatedDate}
+              {basicInfo.full_name || "Your name"}
             </Typography>
+            {headline && (
+              <Typography sx={{ fontSize: { xs: 14, sm: 15 }, color: palette.ink, mt: 0.5, fontWeight: 500 }}>
+                {headline}
+              </Typography>
+            )}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 2, rowGap: 0.5, mt: 0.75 }}>
+              {location && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <LocationOnOutlinedIcon sx={{ fontSize: 16, color: palette.muted }} />
+                  <Typography sx={{ fontSize: 13, color: palette.muted }}>{location}</Typography>
+                </Box>
+              )}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <UpdateRoundedIcon sx={{ fontSize: 16, color: palette.muted }} />
+                <Typography sx={{ fontSize: 13, color: palette.muted }}>Updated {lastUpdatedDate}</Typography>
+              </Box>
+            </Box>
           </Box>
+
+          {/* LinkedIn button (desktop: right side) */}
+          {linkedinHref && (
+            <Button
+              component="a"
+              href={linkedinHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              startIcon={<LinkedInIcon />}
+              endIcon={<OpenInNewRoundedIcon sx={{ fontSize: "15px !important" }} />}
+              sx={{
+                alignSelf: "flex-start",
+                mt: { xs: 0, sm: "68px" },
+                flexShrink: 0,
+                textTransform: "none",
+                fontWeight: 700,
+                fontSize: 13,
+                borderRadius: "10px",
+                px: 1.5,
+                color: "#0A66C2",
+                border: "1px solid #CFE0F3",
+                bgcolor: "#F3F8FD",
+                "&:hover": { bgcolor: "#E8F1FB", borderColor: "#0A66C2" },
+              }}
+            >
+              LinkedIn
+            </Button>
+          )}
         </Box>
 
-        <Divider sx={{ my: 2.5, borderColor: palette.line }} />
+        {/* ── Stat tiles ── */}
+        <Box
+          sx={{
+            mt: { xs: 2.25, sm: 2.75 },
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: { xs: 1, sm: 1.5 },
+          }}
+        >
+          <StatTile icon={<WorkOutlineIcon sx={{ fontSize: 18 }} />} label="Total exp" value={totalExp} />
+          <StatTile icon={<TimelineOutlinedIcon sx={{ fontSize: 18 }} />} label="Relevant" value={relevantExp} />
+          <StatTile icon={<EventAvailableOutlinedIcon sx={{ fontSize: 18 }} />} label="Notice" value={noticeText} />
+        </Box>
 
-        {/* ── Two-column info grid ── */}
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <InfoRow icon={<LocationOnOutlinedIcon sx={{ fontSize: 18 }} />}>
-              {basicInfo.city}
-              {basicInfo.city && basicInfo.country ? ", " : ""}
-              {basicInfo.country}
-            </InfoRow>
-            <InfoRow icon={<WorkOutlineIcon sx={{ fontSize: 18 }} />}>
-              <strong>Total Exp:</strong>{" "}
-              {candidateDetails?.data?.total_experience
-                ?.replace(" years", "y")
-                .replace(" months", "m") || "—"}
-            </InfoRow>
-
-            <InfoRow icon={<WorkOutlineIcon sx={{ fontSize: 18 }} />}>
-              <strong>Relevant Exp:</strong>{" "}
-              {candidateDetails?.data?.relevant_experience
-                ? `${candidateDetails.data.relevant_experience.years}y ${candidateDetails.data.relevant_experience.months}m`
-                : "—"}
-            </InfoRow>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <InfoRow icon={<EmailOutlined sx={{ fontSize: 18 }} />} verified>
-              {basicInfo.email || "—"}
-            </InfoRow>
-            <InfoRow
-              icon={<PhoneOutlinedIcon sx={{ fontSize: 18 }} />}
-              verified={isPhoneVerified}
-              onVerify={basicInfo.mobile ? handleVerifyPhone : undefined}
-            >
-              {basicInfo.mobile || "—"}
-            </InfoRow>
-            <InfoRow icon={<HourglassEmptyIcon sx={{ fontSize: 18 }} />}>
-              {basicInfo.notice_period_days === 0
-                ? "Immediately available"
-                : `${basicInfo.notice_period_days} Days or less notice period`}
-            </InfoRow>
-          </Grid>
-        </Grid>
+        {/* ── Contact ── */}
+        <Box
+          sx={{
+            mt: { xs: 2, sm: 2.5 },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
+            columnGap: 3,
+            rowGap: 0.25,
+          }}
+        >
+          <ContactRow icon={<EmailOutlined sx={{ fontSize: 18 }} />} verified={!!basicInfo.email}>
+            {basicInfo.email || "—"}
+          </ContactRow>
+          <ContactRow
+            icon={<PhoneOutlinedIcon sx={{ fontSize: 18 }} />}
+            verified={isPhoneVerified}
+            action={
+              !isPhoneVerified && basicInfo.mobile ? (
+                <LinkAction onClick={handleVerifyPhone} color={palette.amber}>
+                  Verify
+                </LinkAction>
+              ) : null
+            }
+          >
+            {formatPhone(basicInfo.mobile) || "—"}
+          </ContactRow>
+          <ContactRow
+            icon={<LinkedInIcon sx={{ fontSize: 19, color: linkedinHref ? "#0A66C2" : palette.muted }} />}
+            href={linkedinHref || undefined}
+            action={
+              !linkedinHref ? (
+                <LinkAction onClick={openEditor}>
+                  <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
+                    <AddRoundedIcon sx={{ fontSize: 16 }} /> Add LinkedIn
+                  </Box>
+                </LinkAction>
+              ) : null
+            }
+          >
+            {linkedinHref ? shortLinkedIn(linkedinHref) : ""}
+          </ContactRow>
+        </Box>
 
         {(uploadError || viewError) && (
           <Typography sx={{ color: palette.coral, fontSize: 13, mt: 1.5 }}>
@@ -581,20 +845,20 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
         )}
 
         {/* ── About ── */}
-        <Divider sx={{ my: 2.5, borderColor: palette.line }} />
+        <Divider sx={{ my: { xs: 2, sm: 2.5 }, borderColor: palette.line }} />
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
           <NotesOutlinedIcon sx={{ fontSize: 18, color: palette.teal }} />
           <Typography sx={{ fontFamily: fonts.display, fontWeight: 600, fontSize: 15, color: palette.ink }}>
             About
           </Typography>
         </Box>
-        <AboutText text={basicInfo.summary} onAdd={() => setOpen(true)} />
+        <AboutText text={basicInfo.summary} onAdd={openEditor} />
       </Box>
 
       {/* ── Edit Dialog — same design as the Personal Details dialog ── */}
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => !saving && setOpen(false)}
         maxWidth="sm"
         fullWidth
         PaperProps={{ sx: { borderRadius: "14px" } }}
@@ -700,6 +964,33 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
             </Grid>
           </Box>
 
+          {/* ── Online profile ─────────────────────────────────────────── */}
+          <Box sx={{ mt: 3 }}>
+            <Divider sx={{ mb: 2, borderColor: palette.line }} />
+            <GroupHeading icon={LinkedInIcon} title="Online Profile" />
+            <TextField
+              fullWidth
+              size="small"
+              label="LinkedIn Profile URL"
+              placeholder="linkedin.com/in/your-name"
+              value={linkedinDraft}
+              onChange={(e) => {
+                setLinkedinDraft(e.target.value);
+                setLinkedinError("");
+              }}
+              onBlur={() => linkedinDraft && setLinkedinDraft(normalizeLinkedIn(linkedinDraft))}
+              error={!!linkedinError}
+              helperText={linkedinError || "Optional — shown on your profile for recruiters"}
+              inputProps={{ inputMode: "url", maxLength: 200 }}
+              InputProps={{
+                startAdornment: (
+                  <LinkedInIcon sx={{ fontSize: 18, color: "#0A66C2", mr: 1 }} />
+                ),
+              }}
+              sx={dialogFieldSx}
+            />
+          </Box>
+
           {/* ── About ──────────────────────────────────────────────────── */}
           <Box sx={{ mt: 3 }}>
             <Divider sx={{ mb: 2, borderColor: palette.line }} />
@@ -719,9 +1010,13 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
           </Box>
         </DialogContent>
 
+        {saveError && (
+          <Typography sx={{ color: palette.coral, fontSize: 13, px: 3, pt: 1.5 }}>{saveError}</Typography>
+        )}
         <DialogActions sx={{ p: 2 }}>
           <Button
             variant="outlined"
+            disabled={saving}
             onClick={() => setOpen(false)}
             sx={{ borderColor: palette.line, color: palette.ink, textTransform: "none" }}
           >
@@ -730,6 +1025,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
           <Button
             variant="contained"
             onClick={handleUpdate}
+            disabled={saving}
             sx={{
               bgcolor: palette.teal,
               textTransform: "none",
@@ -737,7 +1033,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
               "&:hover": { bgcolor: palette.tealDeep },
             }}
           >
-            Update Profile
+            {saving ? "Saving..." : "Update Profile"}
           </Button>
         </DialogActions>
       </Dialog>
