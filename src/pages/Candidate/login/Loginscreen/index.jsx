@@ -26,7 +26,7 @@ import {
 import { useCandidateLoginMutation } from "../../../../store/api/settings/CandidatePortalApis";
 import ForgotPassword from "../Forgotpassword/forgotPassword.jsx";
 import employerImage from "../../../../assets/career_login_illustration_v4.svg";
-
+import QrJobNotice from "../../../../components/QrJobNotice";
 const TOKEN_EXPIRY_KEY = "CANDIDATE_TOKEN_EXPIRY";
 
 const MicrosoftIcon = () => (
@@ -331,6 +331,7 @@ const CandidateLogin = () => {
               <Typography sx={{ fontSize: "12px", color: "#9C9C9C", mb: 2.5 }}>
                 Enter credentials to login
               </Typography>
+              <QrJobNotice variant="login" onCreateAccount={() => navigate("/for-candidate/signup")} />
 
               {/* form */}
               <Box component="form" onSubmit={handleSubmit}>

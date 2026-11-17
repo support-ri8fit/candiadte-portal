@@ -29,7 +29,7 @@ import {
   setItem,
 } from "../../../utils/helper";
 import employerImage from "../../../assets/career_login_illustration_v4.svg";
-
+import QrJobNotice from "../../../components/QrJobNotice";
 /* ── icons ───────────────────────────────────────────────────────────────── */
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -609,7 +609,7 @@ useEffect(() => {
                   sx={fs}
                 />
               </Box>
-
+              <QrJobNotice variant="signup" onSignIn={() => navigate("/for-candidate/login")} />
               <Box component="form" onSubmit={handleSubmit}>
                 {/* Email */}
                 <TextField

@@ -44,6 +44,7 @@ import { useSelector } from "react-redux";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import { useCandidateLogoutMutation } from "../store/api/settings/CandidatePortalApis";
+import QrJobPrompt from "./QrJobPrompt";
 /* ── Candidate display name ───────────────────────────────────────────────
    The name can sit in different places depending on how the user got here
    (login response, register / resume data, old localStorage) — use the
@@ -695,6 +696,9 @@ const currentLabel = currentItem?.label || "Page";
           <Outlet />
         </Box>
       </Box>
+      {/* Job QR code visit → "Apply to this job?" (existing and new candidates) */}
+      <QrJobPrompt />
+
       {/* "Signing you out…" overlay while the logout API runs */}
       <Backdrop
         open={loggingOut}

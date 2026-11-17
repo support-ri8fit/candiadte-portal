@@ -18,12 +18,14 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import TuneIcon from "@mui/icons-material/Tune";
 import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
+import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
 import { keyframes } from "@emotion/react";
 import { motion } from "framer-motion";
 import { AppContext } from "../../../../AppContext";
 import { toast } from "react-toastify";
 import { getItem, CANDIDATE_ACCESS_TOKEN } from "../../../../utils/helper.js";
 import { useNavigate } from "react-router-dom";
+import { captureQrJobFromUrl, getQrJobId, clearQrJobId } from "../../../../utils/qrJob.js";
 import { useDispatch, useSelector } from "react-redux";
 import {
   candidateGetUserDetails,
@@ -33,6 +35,7 @@ import {
   useGetFunctionalRolesQuery,
   useLazyGetSubFunctionsQuery,
   useUploadCandidateAdditionalDetailsMutation,
+  useUploadCandidateResumeMutation,
   useGetCandidateResumeStatusQuery,
 } from "../../../../store/api/settings/CandidatePortalApis";
 import { candidateSetResumeParsedData } from "../../../../store/slices/candidateSlice";
@@ -329,6 +332,16 @@ const CandidateProfile = () => {
   const [triggerGetSubFunctions] = useLazyGetSubFunctionsQuery();
   const [uploadCandidateAdditionalDetails] =
     useUploadCandidateAdditionalDetailsMutation();
+  // QR registration: the candidate came from a job's QR code. The job id is sent
+  // to POST /candidate/upload-resume-additional-details/, which takes domain,
+  // role and area of interest from that job — so those fields are hidden.
+  const [uploadResumeForJob] = useUploadCandidateResumeMutation();
+  const [qrJobId, setQrJobId] = useState(() => captureQrJobFromUrl() || getQrJobId());
+  const isQrRegistration = !!qrJobId;
+  const leaveQrFlow = () => {
+    clearQrJobId();
+    setQrJobId("");
+  };
   const [taskId, setTaskId] = useState(null);
 
   // Polls only while a taskId is set — stops the moment we navigate away
@@ -355,6 +368,7 @@ const CandidateProfile = () => {
       setTaskId(null);
       dispatch(candidateSetResumeParsedData(payload));
       toast.success("Registration successful 🎉");
+      // QR job id is kept — QrJobPrompt (in the layout) confirms the application
       // A fresher has no work experience — the stepper opens on Education
       navigate("/for-candidate/profile-details", {
         state: { workStatus: getWorkStatus() },
@@ -512,9 +526,10 @@ const CandidateProfile = () => {
     )
       temp.phone_number = "Valid phone number required";
     if (!safeFormData.resume) temp.resume = "Resume is required";
-    if (!safeFormData.domain) temp.domain = "Domain is required";
+    // QR registration: domain / function / position come from the job
+    if (!isQrRegistration && !safeFormData.domain) temp.domain = "Domain is required";
     // Function / Position type are asked only for the Clinical domain
-    if (isClinicalDomain(safeFormData.domain)) {
+    if (!isQrRegistration && isClinicalDomain(safeFormData.domain)) {
       if (!safeFormData.area_of_interest)
         temp.area_of_interest = "Function is required";
       if (!safeFormData.position_role)
@@ -581,7 +596,31 @@ const CandidateProfile = () => {
         fd.append("resume", safeFormData.resume);
       }
 
-      const response = await uploadCandidateAdditionalDetails(fd).unwrap();
+      // QR registration → the job-aware API with job_id; otherwise the normal one
+      let response;
+      if (isQrRegistration) {
+        const qr = new FormData();
+        qr.append("job_id", qrJobId);
+        qr.append("phone_number", rawPhone);
+        qr.append(
+          "availability",
+          isFresherSelected ? availabilityMap.immediate : availabilityMap[safeFormData.availability] ?? "",
+        );
+        qr.append("work_status", safeFormData.work_status || "");
+        if (safeFormData.resume instanceof File) qr.append("resume", safeFormData.resume);
+        response = await uploadResumeForJob(qr).unwrap();
+
+        // If this API answers straight away (no background task), finish here
+        if (response?.success !== false && !response?.data?.task_id) {
+          if (response?.data?.resume_data) dispatch(candidateSetResumeParsedData(response.data));
+          saveWorkStatus(safeFormData.work_status);
+          toast.success("Registration successful 🎉");
+          navigate("/for-candidate/profile-details", { state: { workStatus: getWorkStatus() } });
+          return;
+        }
+      } else {
+        response = await uploadCandidateAdditionalDetails(fd).unwrap();
+      }
 
       if (response?.success && response?.data?.task_id) {
         // Remembered so the stepper knows to skip Work Experience for a fresher
@@ -593,8 +632,10 @@ const CandidateProfile = () => {
       }
     } catch (error) {
       console.error("Submit error:", error?.response?.data || error);
+      const detail = error?.data?.detail ?? error?.response?.data?.detail;
       toast.error(
-        error?.response?.data?.detail?.[0]?.msg ||
+        (Array.isArray(detail) ? detail[0]?.msg : typeof detail === "string" ? detail : "") ||
+          error?.data?.message ||
           "Something went wrong. Please try again.",
       );
       setIsSubmitting(false);
@@ -678,6 +719,44 @@ const CandidateProfile = () => {
             Complete your profile to receive better job recommendations.
           </Typography>
         </Box>
+
+        {/* ── QR registration banner ─────────────────────────────────── */}
+        {isQrRegistration && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 1.5,
+              mb: { xs: 2, sm: 2.5 },
+              px: 2,
+              py: 1.5,
+              bgcolor: "#EAF5F4",
+              border: "1px solid #BFDCD9",
+              borderRadius: "10px",
+            }}
+          >
+            <Box sx={{ display: "flex", gap: 1.25, minWidth: 0, flex: "1 1 260px" }}>
+              <QrCode2RoundedIcon sx={{ fontSize: 22, color: "#2B6F71", mt: "1px" }} />
+              <Box>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#1E4F50" }}>
+                  You're registering for a job shared with you
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: "#4B5563", mt: 0.25, lineHeight: 1.5 }}>
+                  We'll take the domain and role from that job — just add your details and resume.
+                </Typography>
+              </Box>
+            </Box>
+            <Button
+              size="small"
+              onClick={leaveQrFlow}
+              sx={{ textTransform: "none", fontWeight: 600, color: "#1E4F50", whiteSpace: "nowrap" }}
+            >
+              Register without this job
+            </Button>
+          </Box>
+        )}
 
         <Box component="form" onSubmit={handleSubmit}>
           {/* ── Work Status ─────────────────────────────────────────────── */}
@@ -929,6 +1008,9 @@ const CandidateProfile = () => {
                 gap: 2,
               }}
             >
+              {/* Domain / Function / Position — hidden for QR registration (taken from the job) */}
+              {!isQrRegistration && (
+              <>
               {/* Domain — NEW, was missing entirely */}
               <Box sx={{ gridColumn: "1 / -1" }}>
                 <Typography sx={{ fontSize: "12px", color: "#555", mb: 0.5 }}>
@@ -1052,6 +1134,8 @@ const CandidateProfile = () => {
                 </Box>
 
                 </>
+              )}
+              </>
               )}
 
               {/* Availability — full width, own row. Not asked for a fresher. */}

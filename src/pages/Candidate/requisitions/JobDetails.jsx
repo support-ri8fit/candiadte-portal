@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Typography, Chip, Button, Divider } from "@mui/material";
+import { Box, Typography, Chip, Button, Divider, CircularProgress } from "@mui/material";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -140,7 +140,10 @@ const RequirementRail = ({ title, items, tone = "default" }) => {
 };
 
 /* ── Job details page ────────────────────────────────────────────────── */
-const JobDetails = ({ job, applied, onBack, onApply }) => {
+/* applying  – the apply API is running
+   locked    – the backend says this candidate can't apply right now
+               (is_application_locked); lockReason explains why */
+const JobDetails = ({ job, applied, applying = false, locked = false, lockReason = "", onBack, onApply }) => {
   if (!job) return null;
 
   const location =
@@ -150,17 +153,36 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
     job.summary_final ||
     job.jobDescription ||
     job.summary_initial ||
-    "No description provided.";
+    (job._fromApplication
+      ? "The full job description isn't available here yet."
+      : "No description provided.");
+  const hasSkills = [job.mandatory, job.primary, job.secondary, job.programming_skills].some(
+    (list) => Array.isArray(list) && list.length > 0
+  );
   const hasSalary = job.salary_range_min || job.salary_range_max;
   const tab = priorityColor(job.priority);
 
+  const blocked = applied || applying || locked;
+  const buttonLabel = applied
+    ? "Applied"
+    : applying
+    ? "Applying…"
+    : locked
+    ? "Applications paused"
+    : "Apply Now";
+
   const ApplyButton = ({ fullWidth = false }) => (
     <Button
-      onClick={() => onApply(job)}
-      disabled={applied}
+      onClick={() => !blocked && onApply(job)}
+      disabled={blocked}
       fullWidth={fullWidth}
+      aria-busy={applying}
       startIcon={
-        applied ? <CheckCircleRoundedIcon sx={{ fontSize: 18 }} /> : null
+        applied ? (
+          <CheckCircleRoundedIcon sx={{ fontSize: 18 }} />
+        ) : applying ? (
+          <CircularProgress size={16} sx={{ color: "inherit" }} />
+        ) : null
       }
       sx={{
         textTransform: "none",
@@ -169,14 +191,19 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
         borderRadius: "8px",
         px: 3,
         py: 1.1,
+        whiteSpace: "nowrap",
         color: applied ? PRIMARY_DARK : "#fff",
         bgcolor: applied ? PRIMARY_TINT : PRIMARY,
         border: applied ? `1px solid ${PRIMARY}` : "none",
         "&:hover": { bgcolor: applied ? PRIMARY_TINT : PRIMARY_DARK },
-        "&.Mui-disabled": { color: PRIMARY_DARK, bgcolor: PRIMARY_TINT },
+        "&.Mui-disabled": applied
+          ? { color: PRIMARY_DARK, bgcolor: PRIMARY_TINT }
+          : applying
+          ? { color: "#fff", bgcolor: PRIMARY, opacity: 0.85 }
+          : { color: TEXT_MUTED, bgcolor: "#F3F4F6" },
       }}
     >
-      {applied ? "Applied" : "Apply Now"}
+      {buttonLabel}
     </Button>
   );
 
@@ -204,7 +231,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             minHeight: 0,
           }}
         >
-          Back to Job Applications 
+          Back to Requisitions
         </Button>
       </Box>
 
@@ -241,7 +268,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
                   letterSpacing: 1.4,
                 }}
               >
-                
+                Requisition
               </Typography>
               <Typography
                 sx={{
@@ -258,6 +285,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             </Box>
 
             {/* Position id, styled like a stamped record tag */}
+            {job.job_position_id && (
             <Box
               sx={{
                 fontFamily: FONT_MONO,
@@ -275,6 +303,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             >
               {job.job_position_id}
             </Box>
+            )}
           </Box>
 
           <Box
@@ -286,11 +315,13 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
               flexWrap: "wrap",
             }}
           >
-            <Typography
-              sx={{ fontSize: 14.5, fontWeight: 700, color: PRIMARY_DARK }}
-            >
-              {job.organisation?.organisation_name || "—"}
-            </Typography>
+            {job.organisation?.organisation_name && (
+              <Typography
+                sx={{ fontSize: 14.5, fontWeight: 700, color: PRIMARY_DARK }}
+              >
+                {job.organisation.organisation_name}
+              </Typography>
+            )}
             {job.organisation?.industry && (
               <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED }}>
                 · {job.organisation.industry}
@@ -391,6 +422,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             </Typography>
           </Box>
 
+          {hasSkills && (
           <Box
             sx={{
               background: "#fff",
@@ -432,6 +464,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
               tone="default"
             />
           </Box>
+          )}
         </Box>
 
         {/* Right: record sheet (sticky on desktop) */}
@@ -489,6 +522,11 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             </Box>
             <Box sx={{ p: 2, pt: 1 }}>
               <ApplyButton fullWidth />
+              {locked && !applied && lockReason && (
+                <Typography sx={{ fontSize: 12, color: AMBER, mt: 1, lineHeight: 1.5 }}>
+                  {lockReason}
+                </Typography>
+              )}
             </Box>
           </Box>
         </Box>
@@ -521,7 +559,7 @@ const JobDetails = ({ job, applied, onBack, onApply }) => {
             whiteSpace: "nowrap",
           }}
         >
-          Closes {formatDate(job.closing_date)}
+          {job.closing_date ? `Closes ${formatDate(job.closing_date)}` : ""}
         </Typography>
         <ApplyButton />
       </Box>

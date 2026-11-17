@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Typography,
@@ -7,18 +7,28 @@ import {
   Skeleton,
   Select,
   MenuItem,
+  CircularProgress,
 } from "@mui/material";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import WorkOutlineRoundedIcon from "@mui/icons-material/WorkOutlineRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurnedInOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import BusinessRoundedIcon from "@mui/icons-material/BusinessRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import { toast } from "react-toastify";
-import { useGetMatchedJobsByCountryQuery } from "../../../services/candidateJobsApi.js"; // adjust path to wherever you place the api slice
+import { useLocation } from "react-router-dom";
+import {
+  useGetMatchedJobsByCountryQuery,
+  useLazyGetMatchedJobsByCountryQuery,
+  useApplyToJobMutation,
+  useGetAppliedJobsQuery,
+} from "../../../services/candidateJobsApi.js"; // adjust path to wherever you place the api slice
 import JobDetails from "./JobDetails.jsx";
 import ThankYou from "./ThankYou.jsx";
 
@@ -284,7 +294,10 @@ const EmptyJobs = ({ country, onSwitchCountry, onRefresh, refreshing }) => {
 
 const formatDate = (iso) => {
   if (!iso) return "—";
-  const d = new Date(iso);
+  // "2026-11-16T18:09:53" has no time zone — the backend sends UTC, so read it as UTC
+  const value =
+    typeof iso === "string" && iso.includes("T") && !/(Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? `${iso}Z` : iso;
+  const d = new Date(value);
   return isNaN(d.getTime())
     ? "—"
     : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -299,7 +312,11 @@ const formatDate = (iso) => {
 /* ── Single job card ─────────────────────────────────────────────────── */
 const JobCard = ({ job, applied, onApply, onViewJob }) => {
   // const tier = scoreTier(job.skillintel_score);
-  const location = [job.city, job.country].filter(Boolean).join(", ");
+  const location = [job.city, job.country]
+    .flatMap((part) => String(part || "").split(","))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Box
@@ -336,6 +353,23 @@ const JobCard = ({ job, applied, onApply, onViewJob }) => {
             {job.job_position_id}
           </Typography>
         </Box>
+        {applied && (
+          <Chip
+            icon={<CheckCircleRoundedIcon sx={{ fontSize: 14 }} />}
+            label="Applied"
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: 11,
+              fontWeight: 700,
+              flexShrink: 0,
+              color: PRIMARY_DARK,
+              bgcolor: PRIMARY_TINT,
+              border: `1px solid ${PRIMARY}`,
+              "& .MuiChip-icon": { color: PRIMARY },
+            }}
+          />
+        )}
         {/* <Chip
           label={`${tier.label} · ${Math.round(job.skillintel_score)}%`}
           size="small"
@@ -450,15 +484,346 @@ const JobCard = ({ job, applied, onApply, onViewJob }) => {
   );
 };
 
+/* ── Tabs: Relevant jobs | My applications ─────────────────────────────── */
+const ViewTabs = ({ value, onChange, appliedCount }) => {
+  const tabs = [
+    { key: "relevant", label: "Relevant jobs", Icon: PublicRoundedIcon },
+    {
+      key: "applications",
+      label: `My applications${appliedCount ? ` (${appliedCount})` : ""}`,
+      Icon: AssignmentTurnedInOutlinedIcon,
+    },
+  ];
+  return (
+    <Box
+      role="tablist"
+      sx={{
+        display: "inline-flex",
+        p: 0.5,
+        gap: 0.5,
+        mb: 2.5,
+        bgcolor: "#fff",
+        border: `1px solid ${BORDER}`,
+        borderRadius: "12px",
+        boxSizing: "border-box",
+        maxWidth: "100%",
+        width: { xs: "100%", sm: "auto" },
+      }}
+    >
+      {tabs.map(({ key, label, Icon }) => {
+        const active = value === key;
+        return (
+          <Box
+            key={key}
+            component="button"
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(key)}
+            sx={{
+              all: "unset",
+              boxSizing: "border-box",
+              flex: { xs: 1, sm: "0 0 auto" },
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 0.75,
+              px: { xs: 1, sm: 1.75 },
+              minHeight: 36,
+              borderRadius: "9px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              fontSize: 13,
+              fontWeight: 600,
+              color: active ? "#fff" : INK,
+              bgcolor: active ? PRIMARY : "transparent",
+              transition: "background-color .15s ease",
+              "@media (hover: hover)": { "&:hover": { bgcolor: active ? PRIMARY : PRIMARY_TINT } },
+              "@media (pointer: coarse)": { minHeight: 42 },
+              "&:focus-visible": { outline: `2px solid ${PRIMARY}`, outlineOffset: 2 },
+            }}
+          >
+            <Icon sx={{ fontSize: 17, display: { xs: "none", sm: "inline-block" } }} />
+            {label}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
+
+/* ── "You can't apply right now" banner (is_application_locked) ─────────── */
+const LockBanner = ({ reason }) => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 1.25,
+      mb: 2,
+      px: 1.75,
+      py: 1.25,
+      bgcolor: WARN_TINT,
+      border: "1px solid #EBD3A6",
+      borderRadius: "10px",
+    }}
+  >
+    <LockOutlinedIcon sx={{ fontSize: 18, color: WARN, mt: "1px" }} />
+    <Box>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, color: WARN }}>Applications are paused</Typography>
+      <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED, mt: 0.25 }}>
+        {reason || "You can't apply to new jobs right now. You can still view jobs and your applications."}
+      </Typography>
+    </Box>
+  </Box>
+);
+
+/* ── Stage chip colours ───────────────────────────────────────────────── */
+const stageTone = (item) => {
+  if (item.is_blocked) return { color: "#B0433C", bg: "#FDEDEC", border: "#F3C9C4" };
+  const s = String(item.stage || item.stage_label || "").toLowerCase();
+  if (/hired|offer|selected/.test(s)) return { color: "#1E6B3A", bg: "#E8F5EC", border: "#B9DFC6" };
+  if (/reject|declin|withdraw/.test(s)) return { color: "#B0433C", bg: "#FDEDEC", border: "#F3C9C4" };
+  if (/interview|shortlist|screen/.test(s)) return { color: WARN, bg: WARN_TINT, border: "#EBD3A6" };
+  return { color: PRIMARY_DARK, bg: PRIMARY_TINT, border: "#BFDCD9" };
+};
+
+/* ── One application row ──────────────────────────────────────────────── */
+const ApplicationCard = ({ item, onView, opening }) => {
+  const tone = stageTone(item);
+  // "Hyderabad,Telangana" + "India" → "Hyderabad, Telangana, India"
+  const location = [item.city, item.country]
+    .flatMap((part) => String(part || "").split(","))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+  return (
+    <Box
+      sx={{
+        background: "#fff",
+        border: `1px solid ${BORDER}`,
+        borderRadius: "14px",
+        p: 2.25,
+        display: "flex",
+        flexDirection: "column",
+        gap: 1,
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
+        <Typography
+          onClick={() => onView(item)}
+          sx={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: INK,
+            lineHeight: 1.3,
+            minWidth: 0,
+            overflowWrap: "anywhere",
+            cursor: "pointer",
+            "&:hover": { color: PRIMARY_DARK, textDecoration: "underline" },
+          }}
+        >
+          {item.job_title || "Job"}
+        </Typography>
+        <Chip
+          size="small"
+          icon={item.is_blocked ? <BlockRoundedIcon sx={{ fontSize: 14 }} /> : undefined}
+          label={item.stage_label || item.stage || "Applied"}
+          sx={{
+            height: 24,
+            fontSize: 11,
+            fontWeight: 700,
+            flexShrink: 0,
+            color: tone.color,
+            bgcolor: tone.bg,
+            border: `1px solid ${tone.border}`,
+            "& .MuiChip-icon": { color: tone.color },
+          }}
+        />
+      </Box>
+
+      {item.company_name && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+          <BusinessRoundedIcon sx={{ fontSize: 16, color: PRIMARY }} />
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: PRIMARY_DARK }}>{item.company_name}</Typography>
+        </Box>
+      )}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+        <PlaceRoundedIcon sx={{ fontSize: 16, color: TEXT_MUTED }} />
+        <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED }}>{location || "Location not specified"}</Typography>
+      </Box>
+
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+        {item.job_type && (
+          <Chip label={item.job_type} size="small" sx={{ height: 22, fontSize: 11, bgcolor: SURFACE, border: `1px solid ${BORDER}`, color: INK }} />
+        )}
+        {item.mode_of_work && (
+          <Chip label={item.mode_of_work} size="small" sx={{ height: 22, fontSize: 11, bgcolor: SURFACE, border: `1px solid ${BORDER}`, color: INK }} />
+        )}
+        {!item.job_is_open && (
+          <Chip label="Job closed" size="small" sx={{ height: 22, fontSize: 11, bgcolor: "#F3F4F6", border: `1px solid ${BORDER}`, color: TEXT_MUTED }} />
+        )}
+      </Box>
+
+      {item.is_blocked && item.blocked_reason && (
+        <Typography sx={{ fontSize: 12, color: "#B0433C" }}>{item.blocked_reason}</Typography>
+      )}
+
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 0.75, mt: 0.5, pt: 1.25, borderTop: `1px solid ${BORDER}` }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+          <EventRoundedIcon sx={{ fontSize: 15, color: TEXT_MUTED }} />
+          <Typography sx={{ fontSize: 11.5, color: TEXT_MUTED }}>Applied {formatDate(item.applied_at)}</Typography>
+        </Box>
+        <Button
+          onClick={() => onView(item)}
+          disabled={opening}
+          startIcon={opening ? <CircularProgress size={14} sx={{ color: "inherit" }} /> : null}
+          sx={{
+            order: 3,
+            ml: "auto",
+            textTransform: "none",
+            fontWeight: 700,
+            fontSize: 12.5,
+            borderRadius: "9px",
+            px: 1.75,
+            py: 0.6,
+            color: "#fff",
+            bgcolor: PRIMARY,
+            "&:hover": { bgcolor: PRIMARY_DARK },
+            "&.Mui-disabled": { color: "#fff", bgcolor: PRIMARY, opacity: 0.8 },
+          }}
+        >
+          {opening ? "Opening…" : "View Job"}
+        </Button>
+        {/* only when the stage has changed since applying (more than a minute later) */}
+        {item.stage_updated_at &&
+          Math.abs(new Date(`${item.stage_updated_at}`.replace(/Z?$/, "Z")) - new Date(`${item.applied_at}`.replace(/Z?$/, "Z"))) > 60000 && (
+          <Typography sx={{ fontSize: 11.5, color: TEXT_MUTED }}>Updated {formatDate(item.stage_updated_at)}</Typography>
+        )}
+      </Box>
+    </Box>
+  );
+};
+
+/* ── My applications list ─────────────────────────────────────────────── */
+const ApplicationsList = ({ query, onBrowse, onView, openingId }) => {
+  const { data, isLoading, isError, error, refetch } = query;
+  const items = data?.items || data?.data?.items || [];
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "1fr 1fr 1fr" }, gap: 1.5 }}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} variant="rounded" height={170} sx={{ borderRadius: "14px" }} />
+        ))}
+      </Box>
+    );
+  }
+  if (isError) {
+    return (
+      <Box sx={{ background: WARN_TINT, borderRadius: "10px", p: 2 }}>
+        <Typography sx={{ fontSize: 13.5, color: WARN, fontWeight: 600 }}>Couldn't load your applications.</Typography>
+        <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED, mt: 0.5 }}>
+          {error?.data?.message || (typeof error?.data?.detail === "string" ? error.data.detail : "") || "Please try again."}
+        </Typography>
+        <Button onClick={() => refetch()} size="small" sx={{ mt: 1, textTransform: "none", fontWeight: 600, color: PRIMARY_DARK }}>
+          Retry
+        </Button>
+      </Box>
+    );
+  }
+  if (!items.length) {
+    return (
+      <Box
+        sx={{
+          bgcolor: "#fff",
+          border: `1px dashed ${BORDER}`,
+          borderRadius: "14px",
+          px: { xs: 2.5, sm: 4 },
+          py: { xs: 4, sm: 5 },
+          textAlign: "center",
+        }}
+      >
+        <Box sx={{ width: 56, height: 56, mx: "auto", mb: 1.5, borderRadius: "50%", bgcolor: PRIMARY_TINT, color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <AssignmentTurnedInOutlinedIcon sx={{ fontSize: 26 }} />
+        </Box>
+        <Typography sx={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, color: INK }}>
+          No applications yet
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: TEXT_MUTED, mt: 0.75 }}>
+          Jobs you apply to will show up here with their latest status.
+        </Typography>
+        <Button
+          onClick={onBrowse}
+          sx={{ mt: 2, textTransform: "none", fontWeight: 600, fontSize: 13, borderRadius: "10px", px: 2, color: "#fff", bgcolor: PRIMARY, "&:hover": { bgcolor: PRIMARY_DARK } }}
+        >
+          Browse relevant jobs
+        </Button>
+      </Box>
+    );
+  }
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "1fr 1fr 1fr" }, gap: 1.5 }}>
+      {items.map((item) => (
+        <ApplicationCard
+          key={item.application_id || item.job_id}
+          item={item}
+          onView={onView}
+          opening={openingId === (item.application_id || item.job_id)}
+        />
+      ))}
+    </Box>
+  );
+};
+
+/* Readable message from an RTK Query error */
+const apiMessage = (err) => {
+  const d = err?.data;
+  if (typeof d === "string") return d;
+  if (typeof d?.detail === "string") return d.detail;
+  if (Array.isArray(d?.detail)) return d.detail.map((x) => x?.msg).filter(Boolean).join(", ");
+  return d?.detail?.message || d?.message || "";
+};
+
 const CandidateRequisitions = () => {
   const [country, setCountry] = useState("India");
-  // Local, in-session record of which job_ids the candidate has clicked
-  // Apply on — swap for a real "apply" mutation + appliedJobIds from the
-  // API response once that endpoint exists.
-  const [appliedJobIds, setAppliedJobIds] = useState(() => new Set());
-
+  // tab: "relevant" | "applications" — another page can open a tab via
+  // navigate("/for-candidate/requisitions", { state: { tab: "applications" } })
+  const routerLocation = useLocation();
+  const tabFromRoute = () =>
+    new URLSearchParams(routerLocation.search).get("tab") === "applications" ||
+    routerLocation.state?.tab === "applications"
+      ? "applications"
+      : "relevant";
+  const [tab, setTab] = useState(tabFromRoute);
+  // Opened again with ?tab=applications while already on this page (e.g. after a
+  // QR apply) → switch tab and go back to the list.
+  useEffect(() => {
+    if (tabFromRoute() === "applications") {
+      setTab("applications");
+      setView("list");
+      setSelectedJob(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerLocation.key]);
   // view: "list" | "details" | "thankyou"
   const [view, setView] = useState("list");
+
+  // Applications come from GET /candidates/jobs/applied; jobs applied to in
+  // this session are added straight away so the button flips to "Applied".
+  const appliedQuery = useGetAppliedJobsQuery({ page: 1, pageSize: 100 });
+  const appliedData = appliedQuery.data?.items ? appliedQuery.data : appliedQuery.data?.data;
+  const [justApplied, setJustApplied] = useState(() => new Set());
+  const appliedJobIds = useMemo(() => {
+    const ids = new Set(justApplied);
+    (appliedData?.items || []).forEach((i) => i?.job_id && ids.add(String(i.job_id)));
+    return ids;
+  }, [appliedData, justApplied]);
+  const isApplied = (job) => !!job && appliedJobIds.has(String(job.job_id));
+  const applicationLocked = !!appliedData?.is_application_locked;
+  const lockReason = appliedData?.lock_reason || "";
+  const appliedCount = appliedData?.total ?? (appliedData?.items || []).length;
+
+  const [applyToJob, { isLoading: applying }] = useApplyToJobMutation();
   const [selectedJob, setSelectedJob] = useState(null);
 
   // const { data, isLoading, isFetching, isError, error, refetch } =
@@ -473,11 +838,62 @@ const CandidateRequisitions = () => {
     setView("details");
   };
 
-  const handleApply = (job) => {
-    setAppliedJobIds((prev) => new Set(prev).add(job.job_id));
-    toast.success(`Applied — status changed for "${job.job_title}"`);
-    setSelectedJob(job);
-    setView("thankyou");
+  // POST /candidates/jobs/apply { job_id }
+  const handleApply = async (job) => {
+    if (!job?.job_id || applying || isApplied(job)) return;
+    const markApplied = () => setJustApplied((prev) => new Set(prev).add(String(job.job_id)));
+    try {
+      const res = await applyToJob(job.job_id).unwrap();
+      // some APIs answer 200 with { success:false } — treat as a failure
+      if (res?.success === false) throw { data: res };
+      markApplied();
+      toast.success(res?.message || `Applied to "${job.job_title}"`);
+      setSelectedJob(job);
+      setView("thankyou");
+    } catch (err) {
+      const msg = apiMessage(err);
+      if (err?.status === 409 || /already applied/i.test(msg)) {
+        markApplied();
+        toast.info("You've already applied to this job.");
+      } else {
+        toast.error(msg || "Couldn't apply to this job. Please try again.");
+      }
+    }
+  };
+
+  // Open an application's job. There is no candidate "job by id" API, so the
+  // full job is looked up in the matched-jobs list (current country first, then
+  // the application's country). If it isn't there, the details screen is built
+  // from what the application has (title, location, type, mode).
+  const [loadMatchedJobs] = useLazyGetMatchedJobsByCountryQuery();
+  const [openingId, setOpeningId] = useState(null);
+  const handleViewApplication = async (item) => {
+    const id = String(item.job_id);
+    const key = item.application_id || item.job_id;
+    let job = jobs.find((j) => String(j.job_id) === id);
+    if (!job && item.country && item.country.toLowerCase() !== String(country).toLowerCase()) {
+      setOpeningId(key);
+      try {
+        const res = await loadMatchedJobs({ country: item.country }, true).unwrap();
+        job = (res?.data?.jobs || []).find((j) => String(j.job_id) === id);
+      } catch {
+        /* fall back to the application's own details */
+      }
+      setOpeningId(null);
+    }
+    setSelectedJob(
+      job || {
+        job_id: item.job_id,
+        job_title: item.job_title,
+        city: item.city,
+        country: item.country,
+        mode_of_work: item.mode_of_work,
+        job_type: item.job_type,
+        organisation: item.company_name ? { organisation_name: item.company_name } : undefined,
+        _fromApplication: true, // only the application's fields are known
+      }
+    );
+    setView("details");
   };
 
   const handleBackToList = () => {
@@ -490,7 +906,10 @@ const CandidateRequisitions = () => {
     return (
       <JobDetails
         job={selectedJob}
-        applied={appliedJobIds.has(selectedJob.job_id)}
+        applied={isApplied(selectedJob)}
+        applying={applying}
+        locked={applicationLocked}
+        lockReason={lockReason}
         onBack={handleBackToList}
         onApply={handleApply}
       />
@@ -499,7 +918,15 @@ const CandidateRequisitions = () => {
 
   // ── Thank you view ──────────────────────────────────────────────────
   if (view === "thankyou" && selectedJob) {
-    return <ThankYou job={selectedJob} onBackToList={handleBackToList} />;
+    return (
+      <ThankYou
+        job={selectedJob}
+        onBackToList={() => {
+          handleBackToList();
+          setTab("applications"); // show the new application in the list
+        }}
+      />
+    );
   }
 
   // ── Job list view ───────────────────────────────────────────────────
@@ -536,23 +963,49 @@ const CandidateRequisitions = () => {
               color: PRIMARY_DARK,
             }}
           >
-            <PublicRoundedIcon sx={{ fontSize: 18 }} />
+            {tab === "relevant" ? (
+              <PublicRoundedIcon sx={{ fontSize: 18 }} />
+            ) : (
+              <AssignmentTurnedInOutlinedIcon sx={{ fontSize: 18 }} />
+            )}
           </Box>
           <Box>
             <Typography sx={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, color: INK, lineHeight: 1.2 }}>
-              Relevant Jobs 
+              {tab === "relevant" ? "Relevant Jobs" : "My Applications"}
             </Typography>
             <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED, mt: 0.25 }}>
-              {isFetching
+              {tab === "relevant"
+                ? isFetching
+                  ? "Refreshing…"
+                  : `${jobs.length} open role${jobs.length === 1 ? "" : "s"} in ${countryOf(country).label}`
+                : appliedQuery.isFetching
                 ? "Refreshing…"
-                : `${jobs.length} open role${jobs.length === 1 ? "" : "s"} in ${countryOf(country).label}`}
+                : `${appliedCount} application${appliedCount === 1 ? "" : "s"}`}
             </Typography>
           </Box>
         </Box>
 
         {/* Global country filter — changing this re-queries the API with the new country */}
-        <CountrySelect value={country} onChange={setCountry} />
+        {tab === "relevant" && <CountrySelect value={country} onChange={setCountry} />}
       </Box>
+
+      {/* ── Relevant jobs | My applications ───────────────────────────── */}
+      <ViewTabs value={tab} onChange={setTab} appliedCount={appliedCount} />
+
+      {/* Backend says this candidate can't apply right now */}
+      {applicationLocked && <LockBanner reason={lockReason} />}
+
+      {tab === "applications" && (
+        <ApplicationsList
+          query={appliedQuery}
+          onBrowse={() => setTab("relevant")}
+          onView={handleViewApplication}
+          openingId={openingId}
+        />
+      )}
+
+      {tab === "relevant" && (
+      <>
 
       {/* ── Loading state ──────────────────────────────────────────────── */}
       {isLoading && (
@@ -595,12 +1048,14 @@ const CandidateRequisitions = () => {
             <JobCard
               key={job.job_id}
               job={job}
-              applied={appliedJobIds.has(job.job_id)}
+              applied={isApplied(job)}
               onApply={handleApply}
               onViewJob={handleViewJob}
             />
           ))}
         </Box>
+      )}
+      </>
       )}
     </Box>
   );

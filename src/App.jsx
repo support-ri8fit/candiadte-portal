@@ -29,6 +29,8 @@ import { refreshMeSilently } from "./services/meService";
 import GoogleCallback from "./services/GoogleCallback";
 import { useSelector } from "react-redux";
 import CandidateSettings from "./pages/Candidate/settings";
+import { captureQrJobFromUrl } from "./utils/qrJob";
+captureQrJobFromUrl();
 const CandidateLayout = lazy(() => import("./components/CandidateLayout"));
 
 function App() {

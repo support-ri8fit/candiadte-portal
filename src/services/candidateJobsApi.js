@@ -4,7 +4,10 @@
 // (see that file's header comment for why: reuses your interceptor's auth
 // header + 401 refresh-retry logic instead of duplicating it).
 //
-// Endpoint: GET /candidate/matched-jobs/bycountry?min_score=<n>&country=<c>
+// Endpoints:
+//   GET  /candidate/matched-jobs/bycountry?country=<c>      → Relevant Jobs list
+//   POST /candidates/jobs/apply        { job_id }            → apply to a job (201)
+//   GET  /candidates/jobs/applied?page=&page_size=&stage=   → the candidate's applications
 
 import { createApi } from "@reduxjs/toolkit/query/react";
 import candidateApi from "./candidateApi"; // adjust to match this file's actual location relative to services/candidateApi.js
@@ -29,7 +32,7 @@ const axiosBaseQuery =
 export const candidateJobsApi = createApi({
   reducerPath: "candidateJobsApi",
   baseQuery: axiosBaseQuery(candidateApi),
-  tagTypes: ["MatchedJobs"],
+  tagTypes: ["MatchedJobs", "AppliedJobs"],
   endpoints: (builder) => ({
     // country is passed lowercase to match the curl example (?country=india)
     getMatchedJobsByCountry: builder.query({
@@ -43,12 +46,39 @@ export const candidateJobsApi = createApi({
       }),
       providesTags: ["MatchedJobs"],
     }),
+
+    // Apply to one job. Response: { message, job_matched_candidate_id, job_id,
+    // candidate_id, status, source, match_score, applied_at }
+    applyToJob: builder.mutation({
+      query: (jobId) => ({
+        url: "/candidates/jobs/apply",
+        method: "POST",
+        data: { job_id: jobId },
+      }),
+      invalidatesTags: ["AppliedJobs"],
+    }),
+
+    // The candidate's applications. Response: { total, page, page_size,
+    // is_application_locked, lock_reason, items: [ { application_id, job_id,
+    // job_title, company_name, city, country, mode_of_work, job_type, job_status,
+    // job_is_open, stage, stage_label, applied_at, stage_updated_at,
+    // is_blocked, blocked_reason } ] }
+    getAppliedJobs: builder.query({
+      query: ({ page = 1, pageSize = 100, stage } = {}) => ({
+        url: "/candidates/jobs/applied",
+        method: "GET",
+        params: { page, page_size: pageSize, ...(stage ? { stage } : {}) },
+      }),
+      providesTags: ["AppliedJobs"],
+    }),
   }),
 });
 
 export const {
   useGetMatchedJobsByCountryQuery,
   useLazyGetMatchedJobsByCountryQuery,
+  useApplyToJobMutation,
+  useGetAppliedJobsQuery,
 } = candidateJobsApi;
 
 export default candidateJobsApi;
