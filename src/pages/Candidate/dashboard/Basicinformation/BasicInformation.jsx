@@ -32,6 +32,7 @@ import EventAvailableOutlinedIcon from "@mui/icons-material/EventAvailableOutlin
 import UpdateRoundedIcon from "@mui/icons-material/UpdateRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { AppContext } from "../../../../AppContext";
+import { toast } from "react-toastify";
 import {
   useGetCandidateProfileImageQuery,
   useUploadCandidateProfileImageMutation,
@@ -147,6 +148,9 @@ const StatTile = ({ icon, label, value }) => (
     </Box>
   </Box>
 );
+
+/* Phone "Verify" link stays hidden until the phone OTP API is ready */
+const PHONE_OTP_ENABLED = false;
 
 /* One contact line: icon · value · badge / action */
 const ContactRow = ({ icon, children, href, verified, action }) => (
@@ -467,10 +471,9 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
     false
   );
 
-  const handleVerifyPhone = () => {
-    // TODO: connect the phone OTP API (send OTP → enter OTP → verify)
-    console.info("Verify phone clicked for", basicInfo.mobile);
-  };
+  // Hidden until the backend has a phone OTP API (send OTP → enter OTP → verify).
+  // When it exists: set PHONE_OTP_ENABLED = true and fill this in.
+  const handleVerifyPhone = () => {};
 
   const handleChange = (e) => {
     setBasicInfo({ ...basicInfo, [e.target.name]: e.target.value });
@@ -504,10 +507,12 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
       if (cleanLinkedIn !== normalizeLinkedIn(savedLinkedIn)) {
         await saveLinkedIn(cleanLinkedIn);
       }
+      const notice = Number(basicInfo.notice_period_days);
       const payload = {
         full_name: basicInfo.full_name,
-        employment_id: candidateDetails?.data?.employment_id,
-        notice_period_days: Number(basicInfo.notice_period_days),
+        // no current job → no employment_id (sending "" makes the API refuse the save)
+        employment_id: candidateDetails?.data?.employment_id || undefined,
+        notice_period_days: Number.isFinite(notice) && notice >= 0 ? Math.round(notice) : 0,
         company_name: basicInfo.company_name,
         designation: basicInfo.designation,
         city: basicInfo.city,
@@ -517,16 +522,19 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
 
       const formData = new URLSearchParams();
       Object.keys(payload).forEach((key) => {
+        if (payload[key] === undefined) return; // leave empty ids out
         formData.append(key, payload[key] ?? "");
       });
 
       const response = await updateCandidateProfileDetails(formData).unwrap();
 
-      if (response?.success || response?.status === 200) {
+      // Only an explicit { success: false } (or an error status) is a failure
+      if (response?.success === false || (response?.status && Number(response.status) >= 400)) {
+        setSaveError(response?.message || "Couldn't update your details. Please try again.");
+      } else {
         refetch();
         setOpen(false);
-      } else {
-        setSaveError(response?.message || "Couldn't update your details. Please try again.");
+        toast.success("Your details are updated");
       }
     } catch (error) {
       console.error("Error updating candidate:", error);
@@ -544,52 +552,55 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
   const validateImageFile = (file) => {
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif"];
     const maxSize = 2 * 1024 * 1024;
+    let message = "";
+    if (!file) message = "No file selected.";
+    else if (!allowedTypes.includes(file.type)) message = "Only PNG, JPG, JPEG and GIF images are supported.";
+    else if (file.size > maxSize) message = `This image is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is 2 MB.`;
+    setUploadError(message || null);
+    if (message) toast.error(message);
+    return !message;
+  };
 
-    if (!file) {
-      setUploadError("No file selected.");
-      return false;
-    }
-    if (!allowedTypes.includes(file.type)) {
-      setUploadError("Only PNG, JPG, JPEG, and GIF files are supported.");
-      return false;
-    }
-    if (file.size > maxSize) {
-      setUploadError("File size exceeds 2MB limit.");
-      return false;
-    }
-    setUploadError(null);
-    return true;
+  /* Both photo inputs (camera button + "Replace Photo") use this */
+  const handlePhotoSelected = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so picking the same file again still triggers a change
+    if (!file || !validateImageFile(file)) return; // photo stays as it was
+    handleImageUpload(file);
   };
 
   const handleImageUpload = async (file) => {
-  try {
-    const formData = new FormData();
-    formData.append("profile_image", file);
+    const previous = basicInfo.profile_picture;
+    const preview = URL.createObjectURL(file);
+    setBasicInfo((prev) => ({ ...prev, profile_picture: preview })); // show it right away
+    try {
+      const formData = new FormData();
+      formData.append("profile_image", file);
+      const response = await uploadCandidateProfileImage(formData).unwrap();
+      if (response?.success === false) throw new Error(response?.message || "Upload failed");
 
-    const response = await uploadCandidateProfileImage(formData).unwrap();
-
-    if (response?.success || response?.status === 200) {
-      // Fetch latest profile image from API
+      // Use the stored image from the API (also refreshes the top-bar avatar)
       const imageResponse = await refetchProfileImage();
-
-      if (
-        imageResponse?.data?.success &&
-        imageResponse?.data?.profile_image_url
-      ) {
-        setBasicInfo((prev) => ({
-          ...prev,
-          profile_picture: imageResponse.data.profile_image_url,
-        }));
+      if (imageResponse?.data?.success && imageResponse?.data?.profile_image_url) {
+        setBasicInfo((prev) => ({ ...prev, profile_picture: imageResponse.data.profile_image_url }));
       }
-
       setUploadError(null);
       setImageDialogOpen(false);
+      toast.success("Profile photo updated");
+    } catch (error) {
+      console.error("Error uploading profile image:", error);
+      // Upload failed → put the old photo back
+      setBasicInfo((prev) => ({ ...prev, profile_picture: previous }));
+      const message =
+        error?.data?.message ||
+        (typeof error?.data?.detail === "string" ? error.data.detail : "") ||
+        "Failed to upload profile photo. Please try again.";
+      setUploadError(message);
+      toast.error(message);
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(preview), 60000);
     }
-  } catch (error) {
-    console.error("Error uploading profile image:", error);
-    setUploadError("Failed to upload profile image. Please try again.");
-  }
-};
+  };
 
   /* Values shown in the card */
   const headline = [basicInfo.designation, basicInfo.company_name].filter(Boolean).join(" at ");
@@ -706,14 +717,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
                   type="file"
                   hidden
                   accept="image/png,image/jpeg,image/jpg,image/gif"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file && validateImageFile(file)) {
-                      const imageUrl = URL.createObjectURL(file);
-                      setBasicInfo((prev) => ({ ...prev, profile_picture: imageUrl }));
-                      handleImageUpload(file);
-                    }
-                  }}
+                  onChange={handlePhotoSelected}
                 />
               </IconButton>
             </Tooltip>
@@ -812,7 +816,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
             icon={<PhoneOutlinedIcon sx={{ fontSize: 18 }} />}
             verified={isPhoneVerified}
             action={
-              !isPhoneVerified && basicInfo.mobile ? (
+              PHONE_OTP_ENABLED && !isPhoneVerified && basicInfo.mobile ? (
                 <LinkAction onClick={handleVerifyPhone} color={palette.amber}>
                   Verify
                 </LinkAction>
@@ -1076,17 +1080,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
               type="file"
               hidden
               accept="image/png,image/jpeg,image/jpg,image/gif"
-              onChange={(e) => {
-                const file = e.target.files[0];
-                if (file && validateImageFile(file)) {
-                  const imageUrl = URL.createObjectURL(file);
-                  setBasicInfo((prev) => ({
-                    ...prev,
-                    profile_picture: imageUrl,
-                  }));
-                  handleImageUpload(file);
-                }
-              }}
+              onChange={handlePhotoSelected}
             />
           </Button>
           <Typography variant="caption" align="center" display="block" sx={{ color: palette.muted, mt: 1 }}>

@@ -233,6 +233,32 @@ const availabilityMap = {
   "3_months": "4",
 };
 
+/* ── Resume-processing task kept across a refresh ─────────────────────────
+   After "Save & Continue" the resume is already on the server and being
+   processed. The task id is saved so an F5 during "Processing Resume" picks
+   the same task up again instead of showing an empty form. Forgotten after
+   30 minutes, on success or on failure. */
+const TASK_KEY = "ri8fit_resume_task";
+const TASK_MAX_AGE_MS = 30 * 60 * 1000;
+const readSavedTask = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TASK_KEY) || "null");
+    if (saved?.id && Date.now() - (saved.at || 0) < TASK_MAX_AGE_MS) return saved.id;
+    localStorage.removeItem(TASK_KEY);
+  } catch {
+    /* ignore */
+  }
+  return null;
+};
+const saveTask = (id) => {
+  try {
+    if (id) localStorage.setItem(TASK_KEY, JSON.stringify({ id, at: Date.now() }));
+    else localStorage.removeItem(TASK_KEY);
+  } catch {
+    /* ignore */
+  }
+};
+
 /* Function / Position type apply only to the Clinical domain */
 const isClinicalDomain = (d) => String(d || "").trim().toLowerCase() === "clinical";
 
@@ -319,7 +345,8 @@ const CandidateProfile = () => {
     (state) => state?.candidate?.formData?.loginDetails || {},
   );
   const { email, phonenumber } = loginDetails?.user || {};
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Starts "submitting" if a resume task from before a refresh is still running
+  const [isSubmitting, setIsSubmitting] = useState(() => !!readSavedTask());
   const [countryCode, setCountryCode] = useState("+91");
   const [selectedFunction, setSelectedFunction] = useState(null);
   const [selectedSubFunction, setSelectedSubFunction] = useState(null);
@@ -342,7 +369,12 @@ const CandidateProfile = () => {
     clearQrJobId();
     setQrJobId("");
   };
-  const [taskId, setTaskId] = useState(null);
+  const [taskId, setTaskIdState] = useState(() => readSavedTask());
+  // Keep the saved copy in step with the state
+  const setTaskId = (id) => {
+    saveTask(id);
+    setTaskIdState(id);
+  };
 
   // Polls only while a taskId is set — stops the moment we navigate away
   // (component unmounts) or we explicitly clear it on failure.

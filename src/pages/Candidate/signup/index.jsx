@@ -313,13 +313,22 @@ const CandidateSignup = () => {
         toast.error(msg);
       }
     } catch (err) {
-      const msg = err.response?.data?.message?.includes("email already exists")
-        ? "Email already registered"
-        : err.response?.data?.message || "Error during signup";
+      // RTK Query puts the body in err.data (axios used err.response.data)
+      const body = err?.data || err?.response?.data || {};
+      const raw =
+        body.message ||
+        (typeof body.detail === "string" ? body.detail : "") ||
+        "Error during signup";
+      const msg = /already (exists|registered)/i.test(raw)
+        ? "Email already registered. Please log in."
+        : raw;
       setErrors((p) => ({ ...p, email: true, emailMessage: msg }));
       toast.error(msg);
+    } finally {
+      // Always stop both loaders — success, "already registered" or a network error
+      setLoading(false);
+      setSignupLoading(false);
     }
-    setLoading(false);
   };
 
   const handleOtpSubmit = async () => {

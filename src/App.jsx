@@ -8,7 +8,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { ToastContainer } from "react-toastify";
-
+import NotFound from "./pages/Candidate/NotFound";
 import theme from "./styles/theme";
 import Success from "./components/Utils/DemoSuccess";
 import Unauthorized from "./routes/Unauthorized";
@@ -115,6 +115,9 @@ function App() {
               <Route path="settings" element={<CandidateSettings />} />
             </Route>
           </Route>
+
+          {/* Any address that doesn't exist → "Page not found" */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
     </ThemeProvider>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import {
   Box,
   Chip,
@@ -22,6 +22,7 @@ import { AppContext } from "../../../../AppContext";
 import candidateApi from "../../../../services/candidateApi";
 import {
   useGetCandidateKeySkillsQuery,
+  useGetCandidateProfileQuery,
 } from "../../../../store/api/settings/CandidatePortalApis";
 import { palette, fonts } from "../../../../theme/candidateTokens";
 
@@ -75,12 +76,39 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
     isLoading,
     refetch,
   } = useGetCandidateKeySkillsQuery();
-  // Candidate id for the skill APIs. Falls back to other id fields the
-  // key-skills response may use, so the URL never ends in "/undefined".
-  const skillId =
-    keySkillsResponse?.data?.candidate_id ??
-    keySkillsResponse?.data?.skill_info?.candidate_id ??
-    keySkillsResponse?.data?.id;
+  // {skill_id} in add-skill / update-skill-info / delete-skill is the id of the
+  // candidate's SKILL RECORD — NOT the candidate id and NOT any other id in
+  // get-key-skills. It comes from GET /candidate/get-candidates-complete-details
+  // → data.skill_info[0].id (array) or data.skill_info.id (object).
+  // (The profile page's keySkillInfo prop is null today, so we load it here.)
+  const { data: completeDetails, refetch: refetchCompleteDetails } = useGetCandidateProfileQuery();
+  const firstInfo = (src) => (Array.isArray(src?.skill_info) ? src.skill_info[0] : src?.skill_info) || {};
+  const completeData = completeDetails?.data?.data || completeDetails?.data || {};
+  const recordInfo = firstInfo(completeData);
+  const createdIdRef = useRef(null); // id of a record created in this visit
+  const skillId = recordInfo.id || firstInfo(keySkillInfo).id || createdIdRef.current || null;
+  // Only for creating the record when the candidate has none yet
+  const keyData = keySkillsResponse?.data || {};
+  const candidateId =
+    keyData.candidate_id || recordInfo.candidate_id || completeData.candidate_id || completeData.id;
+
+  // Shows in the browser console which id the skill APIs use
+  useEffect(() => {
+    if (completeDetails) console.info("[Key skills] skill record id:", skillId || "none (will be created)");
+  }, [completeDetails, skillId]);
+
+  const is404 = (x) =>
+    Number(x?.status) === 404 ||
+    Number(x?.response?.status) === 404 ||
+    Number(x?.response?.data?.status) === 404 ||
+    Number(x?.data?.status) === 404;
+
+  /* Calls the skill API with the skill-record id.
+     No record yet → returns null, and the caller creates one instead. */
+  const callSkillApi = async (request) => {
+    if (!skillId) return null;
+    return request(skillId);
+  };
 
   // Summary / availability / TA experience must be re-sent with every
   // update-skill-info call (it replaces the whole record) — use the CURRENT
@@ -151,32 +179,49 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
     setEditIndex(null);
   };
 
+  const [deletingSkill, setDeletingSkill] = useState(null);
   const handleDeleteClick = async (index) => {
     const skillToDelete = skills[index];
+    if (!skillToDelete || deletingSkill) return;
+    setDeletingSkill(skillToDelete);
+    setError(null);
     try {
-      const response = await candidateApi.delete(
-        `/candidates/delete-skill/${skillId}`,
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          data: new URLSearchParams({
-            skill_to_delete: skillToDelete,
-          }),
-        }
-      );
-
-      if (response.status === 200) {
-        const updatedSkills = skills.filter((_, i) => i !== index);
-        setSkills(updatedSkills);
-        setFormData((prev) => ({ ...prev, itSkills: updatedSkills }));
-        refetch();
+      let res = await callSkillApi((id) =>
+        candidateApi.delete(`/candidates/delete-skill/${id}`, {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          data: new URLSearchParams({ skill_to_delete: skillToDelete }),
+        })
+      ).catch((err) => {
+        if (is404(err)) return err.response;
+        throw err;
+      });
+      if (!res || is404(res)) {
+        res = await createSkillRecord(skills.filter((skill) => skill !== skillToDelete));
+      }
+      const failed = failureMessage(res);
+      if (failed) {
+        setError(failed);
+        console.error("Delete skill failed:", res?.data, { skillId });
+        return;
+      }
+      const updatedSkills = skills.filter((skill) => skill !== skillToDelete);
+      setSkills(updatedSkills);
+      setFormData((prev) => ({ ...prev, itSkills: updatedSkills }));
+      refetch();
+      // Deleted from the Edit dialog → close it
+      if (openDialog) {
+        setOpenDialog(false);
+        setCurrentSkill("");
+        setEditIndex(null);
       }
     } catch (err) {
-      setError("Failed to delete skill. Please try again.");
-      console.error("Delete skill error:", err);
+      setError(errorMessage(err, "Couldn't delete the skill. Please try again."));
+      console.error("Delete skill error:", err?.response?.data || err, { skillId });
+    } finally {
+      setDeletingSkill(null);
     }
   };
+
 
   const finishSave = (updatedSkills) => {
     setSkills(updatedSkills);
@@ -201,11 +246,20 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
 
     setSaving(true);
     try {
-      const res = await candidateApi.post(
-        `/candidates/add-skill/${skillId}`,
-        new URLSearchParams({ skill_to_add: newSkills.join(", ") }),
-        { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-      );
+      let res = await callSkillApi((id) =>
+        candidateApi.post(
+          `/candidates/add-skill/${id}`,
+          new URLSearchParams({ skill_to_add: newSkills.join(", ") }),
+          { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+        )
+      ).catch((err) => {
+        if (is404(err)) return err.response; // handled just below
+        throw err;
+      });
+      // add-skill not found for this profile → save the full list instead
+      if (!res || is404(res)) {
+        res = await saveFullList([...skills, ...newSkills]);
+      }
       const failed = failureMessage(res);
       if (failed) {
         setError(failed);
@@ -219,6 +273,50 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
     } finally {
       setSaving(false);
     }
+  };
+
+  /* PUT /candidates/update-skill-info/{skill_id} — replaces the whole list,
+     keeping the current summary / availability / TA experience */
+  const saveFullList = async (list) => {
+    const res = await callSkillApi((id) =>
+      candidateApi.put(
+        `/candidates/update-skill-info/${id}`,
+        {
+          summary: skillInfo?.summary || "",
+          availability: Number.parseInt(skillInfo?.availability, 10) || 0, // API wants an integer
+          // API wants text here; the GET can return an object → leave it out then
+          // (undefined keys are dropped from the JSON, so the saved value is kept)
+          ta_experience_combined:
+            typeof skillInfo?.ta_experience_combined === "string"
+              ? skillInfo.ta_experience_combined
+              : undefined,
+          key_skills: list.join(", "),
+        },
+        { headers: { "Content-Type": "application/json" } }
+      )
+    ).catch((err) => {
+      if (is404(err)) return err.response;
+      throw err;
+    });
+    return !res || is404(res) ? createSkillRecord(list) : res;
+  };
+
+  /* "Skill record not found for this candidate" → the candidate has no skills
+     row yet (add-skill / update-skill-info / delete-skill only change an
+     existing row). Create it with POST /candidates/{candidate_id}/add-update-skills. */
+  const createSkillRecord = async (list) => {
+    if (!candidateId) throw new Error("Couldn't find your profile. Please refresh the page and try again.");
+    const res = await candidateApi.post(
+      `/candidates/${candidateId}/add-update-skills`,
+      [{ key_skills: list.join(", ") }],
+      { headers: { "Content-Type": "application/json" } }
+    );
+    // Keep the new record's id so the next add / edit uses add-skill directly
+    const created = res?.data?.data;
+    const newId = (Array.isArray(created) ? created[0] : created)?.id;
+    if (newId) createdIdRef.current = newId;
+    refetchCompleteDetails(); // picks up the new skill_info.id
+    return res;
   };
 
   /* EDIT — PUT /candidates/update-skill-info/{skill_id}
@@ -245,16 +343,7 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
     const updatedSkills = skills.map((skill, i) => (i === editIndex ? edited : skill));
     setSaving(true);
     try {
-      const res = await candidateApi.put(
-        `/candidates/update-skill-info/${skillId}`,
-        {
-          summary: skillInfo?.summary || "",
-          availability: skillInfo?.availability || 0,
-          ta_experience_combined: skillInfo?.ta_experience_combined || "",
-          key_skills: updatedSkills.join(", "),
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
+      const res = await saveFullList(updatedSkills);
       const failed = failureMessage(res);
       if (failed) {
         setError(failed);
@@ -434,9 +523,9 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
                       "&:hover": {
                         color: "#DC2626",
                       },
-                      // Delete shows on hover only — on touch screens (no hover) don't
-                      // keep an empty gap for it inside the chip
-                      "@media (hover: none)": { display: "none" },
+                      // Touch screens have no hover → always show it, a bit bigger
+                      "@media (hover: none)": { opacity: 1, transform: "scale(1)", fontSize: 18 },
+                      ...(deletingSkill === skill && { opacity: 0.4, pointerEvents: "none" }),
                     }}
                   />
                 </Box>
@@ -605,6 +694,16 @@ function SkillsSection({ keySkillInfo, completeDetailsApi, onSectionComplete }) 
             },
           }}
         >
+          {editIndex !== null && (
+            <Button
+              onClick={() => handleDeleteClick(editIndex)}
+              disabled={saving || !!deletingSkill}
+              startIcon={<DeleteOutlineIcon />}
+              sx={{ color: palette.coral, textTransform: "none", fontWeight: 600, mr: { sm: "auto" } }}
+            >
+              {deletingSkill ? "Deleting…" : "Delete skill"}
+            </Button>
+          )}
           <Button
             onClick={handleCloseDialog}
             disabled={saving}
