@@ -795,14 +795,20 @@ const CandidateRequisitions = () => {
       ? "applications"
       : "relevant";
   const [tab, setTab] = useState(tabFromRoute);
+  // ?job=<id> (from a QR apply) → open that job's details on top of My applications
+  const [pendingJobId, setPendingJobId] = useState(
+    () => new URLSearchParams(routerLocation.search).get("job") || ""
+  );
   // Opened again with ?tab=applications while already on this page (e.g. after a
-  // QR apply) → switch tab and go back to the list.
+  // QR apply) → switch tab; with ?job= also open that job.
   useEffect(() => {
+    const jobParam = new URLSearchParams(routerLocation.search).get("job") || "";
     if (tabFromRoute() === "applications") {
       setTab("applications");
       setView("list");
       setSelectedJob(null);
     }
+    if (jobParam) setPendingJobId(jobParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routerLocation.key]);
   // view: "list" | "details" | "thankyou"
@@ -895,6 +901,69 @@ const CandidateRequisitions = () => {
     );
     setView("details");
   };
+
+  // Open the job asked for in ?job=<id> (QR visit) once we have enough data
+  const lookupRef = React.useRef("");
+  useEffect(() => {
+    if (!pendingJobId) return;
+    const id = String(pendingJobId);
+    const st = routerLocation.state || {};
+    const done = () => {
+      setPendingJobId("");
+      // drop ?job= from the address bar so a refresh / Back shows the list
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("job");
+        window.history.replaceState(window.history.state, "", url.pathname + url.search);
+      } catch {
+        /* ignore */
+      }
+    };
+    const open = (job) => {
+      setSelectedJob(job);
+      setView("details");
+      done();
+    };
+
+    // 1. The full job was passed along → open right away
+    if (st.job && String(st.job.job_id) === id) return open(st.job);
+
+    // 2. Wait for this country's jobs + the applications list
+    if (appliedQuery.isLoading || isLoading) return;
+    const inJobs = jobs.find((j) => String(j.job_id) === id);
+    if (inJobs) return open(inJobs);
+
+    // 3. Not in this country's list — look in the other countries once
+    if (lookupRef.current === id) return;
+    lookupRef.current = id;
+    (async () => {
+      for (const c of COUNTRY_OPTIONS.map((o) => o.value).filter((v) => v !== country)) {
+        try {
+          const res = await loadMatchedJobs({ country: c }, true).unwrap();
+          const found = (res?.data?.jobs || []).find((j) => String(j.job_id) === id);
+          if (found) {
+            setCountry(c); // so Back shows that country's list
+            return open(found);
+          }
+        } catch {
+          /* try the next country */
+        }
+      }
+      // 4. Only the application is known → show what it has
+      const app =
+        (appliedData?.items || []).find((i) => String(i.job_id) === id) ||
+        (st.application && String(st.application.job_id) === id ? st.application : null);
+      if (app) {
+        handleViewApplication(app);
+        done();
+        return;
+      }
+      // 5. Nothing found — the job is closed or not open to this candidate
+      if (st.fromQr) toast.info("This job is no longer open or isn't available for your profile.");
+      done();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingJobId, appliedData, jobs, appliedQuery.isLoading, isLoading]);
 
   const handleBackToList = () => {
     setSelectedJob(null);
@@ -1061,4 +1130,4 @@ const CandidateRequisitions = () => {
   );
 };
 
-export default CandidateRequisitions;
+export default CandidateRequisitions; 

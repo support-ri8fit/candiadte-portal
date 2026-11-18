@@ -1,175 +1,226 @@
 import React from "react";
-import { Box, Typography, Chip, Button, Divider, CircularProgress } from "@mui/material";
+import { Box, Typography, Chip, Button, CircularProgress } from "@mui/material";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
-import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
+import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import BusinessRoundedIcon from "@mui/icons-material/BusinessRounded";
+import EventOutlinedIcon from "@mui/icons-material/EventOutlined";
+import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
+import WorkHistoryOutlinedIcon from "@mui/icons-material/WorkHistoryOutlined";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import MilitaryTechOutlinedIcon from "@mui/icons-material/MilitaryTechOutlined";
+import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
+import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
-/* ── Brand tokens (shared with the rest of the candidate app) ── */
+/* ── Brand tokens (same as the rest of the candidate portal) ─────────────── */
 const INK = "#1F2937";
-const TEXT_MUTED = "#6B7280";
+const MUTED = "#6B7280";
 const PRIMARY = "#2B6F71";
 const PRIMARY_DARK = "#1E4F50";
 const PRIMARY_TINT = "#EAF5F4";
 const BORDER = "#E1E5E7";
+const SURFACE = "#F8FAF9";
 const AMBER = "#B7791F";
 const AMBER_TINT = "#FBF3E4";
-const CLAY = "#B0433C";
-const CLAY_TINT = "#FDEDEC";
-
-/* ── Signature: an off-white "record paper" background + a monospace
-   utility face for anything that reads like a data field (IDs, dates,
-   counts) — a nod to the SDTM/ADaM data-listing world these roles live in ── */
-const PAPER = "#FAF9F6";
+const RED = "#B0433C";
+const RED_TINT = "#FDEDEC";
 const FONT_DISPLAY = "'Georgia', 'Times New Roman', serif";
-const FONT_MONO =
-  "'IBM Plex Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace";
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+// Backend sometimes sends Swagger placeholders ("string") or empty values
+const clean = (v) => {
+  const t = v === null || v === undefined ? "" : String(v).trim();
+  return !t || /^(string|null|undefined|n\/a|-|—)$/i.test(t) ? "" : t;
+};
 
 const formatDate = (iso) => {
-  if (!iso) return "—";
+  if (!iso) return "";
   const d = new Date(iso);
   return isNaN(d.getTime())
-    ? "—"
-    : d.toLocaleDateString(undefined, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+    ? ""
+    : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 };
 
-/* Priority drives the tab colour on the left edge of the header — the one
-   place this page spends its "boldness". */
-const priorityColor = (priority) => {
-  const p = (priority || "").toLowerCase();
-  if (p === "high") return { fg: CLAY, bg: CLAY_TINT };
-  if (p === "medium") return { fg: AMBER, bg: AMBER_TINT };
-  if (p === "low") return { fg: PRIMARY, bg: PRIMARY_TINT };
-  return { fg: TEXT_MUTED, bg: "#F3F4F6" };
+const daysLeft = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return Math.ceil((d.setHours(23, 59, 59, 999) - Date.now()) / 86400000);
 };
 
-/* A single "field" row inside the record sheet: LABEL ................ value */
-const RecordField = ({ label, value }) => (
+// "Adoni,Andhra Pradesh" + "India" → "Adoni, Andhra Pradesh, India"
+const formatLocation = (...parts) =>
+  parts
+    .flatMap((p) => String(p || "").split(","))
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join(", ");
+
+const toList = (v) =>
+  (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [])
+    .map(clean)
+    .filter(Boolean);
+
+const priorityTone = (p) => {
+  const v = (p || "").toLowerCase();
+  if (v === "high") return { fg: RED, bg: RED_TINT };
+  if (v === "medium") return { fg: AMBER, bg: AMBER_TINT };
+  if (v === "low") return { fg: PRIMARY_DARK, bg: PRIMARY_TINT };
+  return null;
+};
+
+/* ── Small pieces ────────────────────────────────────────────────────────── */
+const Card = ({ children, sx }) => (
   <Box
     sx={{
-      display: "flex",
-      alignItems: "baseline",
-      justifyContent: "space-between",
-      gap: 1,
-      py: 1,
-      borderBottom: `1px dashed ${BORDER}`,
-      "&:last-of-type": { borderBottom: "none" },
+      bgcolor: "#fff",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "16px",
+      p: { xs: 2.25, sm: 3 },
+      minWidth: 0,
+      ...sx,
     }}
   >
-    <Typography
+    {children}
+  </Box>
+);
+
+const CardTitle = ({ icon: Icon, children }) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.75 }}>
+    <Box
       sx={{
-        fontFamily: FONT_MONO,
-        fontSize: 10.5,
-        fontWeight: 600,
-        color: TEXT_MUTED,
-        textTransform: "uppercase",
-        letterSpacing: 0.6,
-        flexShrink: 0,
+        width: 30,
+        height: 30,
+        borderRadius: "9px",
+        bgcolor: PRIMARY_TINT,
+        color: PRIMARY,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      {label}
-    </Typography>
-    <Typography
-      sx={{
-        fontFamily: FONT_MONO,
-        fontSize: 12.5,
-        fontWeight: 600,
-        color: INK,
-        textAlign: "right",
-      }}
-    >
-      {value}
+      <Icon sx={{ fontSize: 17 }} />
+    </Box>
+    <Typography sx={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16.5, color: INK }}>
+      {children}
     </Typography>
   </Box>
 );
 
-/* A requirement group rendered as a tinted rail with a coloured rule,
-   rather than a floating row of generic chips — reads like a labelled
-   section of a requirement matrix. */
-const RequirementRail = ({ title, items, tone = "default" }) => {
-  if (!items || items.length === 0 || (items.length === 1 && !items[0]))
-    return null;
+const MetaChip = ({ label }) => (
+  <Chip
+    label={label}
+    size="small"
+    sx={{
+      height: 26,
+      fontSize: 12,
+      fontWeight: 600,
+      color: INK,
+      bgcolor: SURFACE,
+      border: `1px solid ${BORDER}`,
+    }}
+  />
+);
 
-  const rail =
-    tone === "mandatory" ? CLAY : tone === "primary" ? PRIMARY : "#B9C0C4";
-  const chipTone =
-    tone === "mandatory"
-      ? { bgcolor: CLAY_TINT, border: `1px solid ${CLAY}30`, color: CLAY }
-      : tone === "primary"
-        ? {
-            bgcolor: PRIMARY_TINT,
-            border: `1px solid ${PRIMARY}30`,
-            color: PRIMARY_DARK,
-          }
-        : { bgcolor: "#F3F4F6", border: `1px solid ${BORDER}`, color: INK };
-
+/* Skill group — tone sets the chip colour */
+const SKILL_TONES = {
+  must: { fg: RED, bg: RED_TINT, border: "#F3C9C4", dot: RED },
+  primary: { fg: PRIMARY_DARK, bg: PRIMARY_TINT, border: "#BFDCD9", dot: PRIMARY },
+  nice: { fg: INK, bg: SURFACE, border: BORDER, dot: "#9CA3AF" },
+};
+const SkillGroup = ({ title, hint, items, tone }) => {
+  if (!items.length) return null;
+  const t = SKILL_TONES[tone];
   return (
-    <Box
-      sx={{ display: "flex", gap: 1.5, mb: 2.25, "&:last-of-type": { mb: 0 } }}
-    >
-      <Box sx={{ width: 3, borderRadius: 2, bgcolor: rail, flexShrink: 0 }} />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          sx={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: INK,
-            textTransform: "uppercase",
-            letterSpacing: 0.6,
-            mb: 1,
-          }}
-        >
-          {title}
-        </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-          {items.filter(Boolean).map((item, i) => (
-            <Chip
-              key={i}
-              label={item}
-              size="small"
-              sx={{ height: 25, fontSize: 12, fontWeight: 600, ...chipTone }}
-            />
-          ))}
-        </Box>
+    <Box sx={{ "& + &": { mt: 2.25 } }}>
+      <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 1 }}>
+        <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: t.dot, flexShrink: 0, alignSelf: "center" }} />
+        <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: INK }}>{title}</Typography>
+        {hint && <Typography sx={{ fontSize: 12, color: MUTED }}>{hint}</Typography>}
+      </Box>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+        {items.map((s) => (
+          <Chip
+            key={s}
+            label={s}
+            size="small"
+            sx={{
+              height: 28,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: t.fg,
+              bgcolor: t.bg,
+              border: `1px solid ${t.border}`,
+              "& .MuiChip-label": { px: 1.25 },
+            }}
+          />
+        ))}
       </Box>
     </Box>
   );
 };
 
-/* ── Job details page ────────────────────────────────────────────────── */
-/* applying  – the apply API is running
+/* One row in the "Job overview" side card */
+const OverviewRow = ({ icon: Icon, label, children }) => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: 1.25,
+      py: 1.25,
+      "& + &": { borderTop: `1px dashed ${BORDER}` },
+    }}
+  >
+    <Icon sx={{ fontSize: 18, color: PRIMARY, flexShrink: 0 }} />
+    <Typography sx={{ fontSize: 12.5, color: MUTED, flex: 1, minWidth: 0 }}>{label}</Typography>
+    <Box sx={{ fontSize: 13.5, fontWeight: 600, color: INK, textAlign: "right", minWidth: 0 }}>{children}</Box>
+  </Box>
+);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   applying  – the apply API is running
    locked    – the backend says this candidate can't apply right now
-               (is_application_locked); lockReason explains why */
+               (is_application_locked); lockReason explains why             */
 const JobDetails = ({ job, applied, applying = false, locked = false, lockReason = "", onBack, onApply }) => {
-  if (!job) return null;
+  const company = clean(job.organisation?.organisation_name);
+  const industry = clean(job.organisation?.industry);
+  const location = formatLocation(job.city, job.country);
+  const jobType = clean(job.job_type);
+  const mode = clean(job.mode_of_work);
+  const hasExp = job.min_years != null || job.max_years != null;
+  const experience = hasExp ? `${job.min_years ?? 0}–${job.max_years ?? "?"} yrs` : "";
+  const closes = formatDate(job.closing_date);
+  const left = daysLeft(job.closing_date);
+  const openings = Number(job.no_of_positions) || null;
+  const grade = clean(job.grade_or_level);
+  const workAuth = clean(job.workAuthorization);
+  const salary =
+    clean(job.salary_range_min) || clean(job.salary_range_max)
+      ? `${clean(job.salary_range_min) || "—"} – ${clean(job.salary_range_max) || "—"}${
+          clean(job.salary_unit) ? ` ${clean(job.salary_unit)}` : ""
+        }`
+      : "";
+  const priority = clean(job.priority);
+  const pTone = priorityTone(priority);
 
-  const location =
-    [job.city, job.country].filter(Boolean).join(", ") ||
-    "Location not specified";
   const description =
-    job.summary_final ||
-    job.jobDescription ||
-    job.summary_initial ||
-    (job._fromApplication
-      ? "The full job description isn't available here yet."
-      : "No description provided.");
-  const hasSkills = [job.mandatory, job.primary, job.secondary, job.programming_skills].some(
-    (list) => Array.isArray(list) && list.length > 0
-  );
-  const hasSalary = job.salary_range_min || job.salary_range_max;
-  const tab = priorityColor(job.priority);
+    clean(job.summary_final) ||
+    clean(job.summary_initial) ||
+    clean(job.jobDescription) ||
+    (job._fromApplication ? "The full job description isn't available here yet." : "No description provided.");
 
+  const must = toList(job.mandatory);
+  const primary = toList(job.primary);
+  const secondary = toList(job.secondary);
+  const tools = toList(job.programming_skills);
+  const hasSkills = must.length || primary.length || secondary.length || tools.length;
+
+  /* ── Apply button (states) ─────────────────────────────────────────── */
   const blocked = applied || applying || locked;
-  const buttonLabel = applied
-    ? "Applied"
-    : applying
-    ? "Applying…"
-    : locked
-    ? "Applications paused"
-    : "Apply Now";
+  const buttonLabel = applied ? "Applied" : applying ? "Applying…" : locked ? "Applications paused" : "Apply now";
 
   const ApplyButton = ({ fullWidth = false }) => (
     <Button
@@ -182,25 +233,28 @@ const JobDetails = ({ job, applied, applying = false, locked = false, lockReason
           <CheckCircleRoundedIcon sx={{ fontSize: 18 }} />
         ) : applying ? (
           <CircularProgress size={16} sx={{ color: "inherit" }} />
+        ) : locked ? (
+          <LockOutlinedIcon sx={{ fontSize: 17 }} />
         ) : null
       }
       sx={{
         textTransform: "none",
         fontWeight: 700,
-        fontSize: 14,
-        borderRadius: "8px",
+        fontSize: 14.5,
+        borderRadius: "10px",
         px: 3,
-        py: 1.1,
+        minHeight: 44,
         whiteSpace: "nowrap",
         color: applied ? PRIMARY_DARK : "#fff",
         bgcolor: applied ? PRIMARY_TINT : PRIMARY,
         border: applied ? `1px solid ${PRIMARY}` : "none",
+        boxShadow: applied ? "none" : "0 6px 16px rgba(43,111,113,0.25)",
         "&:hover": { bgcolor: applied ? PRIMARY_TINT : PRIMARY_DARK },
         "&.Mui-disabled": applied
           ? { color: PRIMARY_DARK, bgcolor: PRIMARY_TINT }
           : applying
           ? { color: "#fff", bgcolor: PRIMARY, opacity: 0.85 }
-          : { color: TEXT_MUTED, bgcolor: "#F3F4F6" },
+          : { color: MUTED, bgcolor: "#F3F4F6", boxShadow: "none" },
       }}
     >
       {buttonLabel}
@@ -210,356 +264,259 @@ const JobDetails = ({ job, applied, applying = false, locked = false, lockReason
   return (
     <Box
       sx={{
-        background: PAPER,
-        border: `1px solid ${BORDER}`,
-        borderRadius: "14px",
-        overflow: "hidden",
-        pb: { xs: 9, md: 0 }, // room for the fixed mobile apply bar
+        maxWidth: 1180,
+        mx: "auto",
+        width: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+        // space from the sidebar / top bar (the layout itself adds no padding)
+        px: { xs: 2, sm: 3, md: 4 },
+        pt: { xs: 2, sm: 3 },
+        pb: { xs: 12, sm: 4 }, // phones: room for the fixed Apply bar
       }}
     >
-      {/* Back bar */}
-      <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2 }}>
-        <Button
-          onClick={onBack}
-          startIcon={<ArrowBackRoundedIcon sx={{ fontSize: 18 }} />}
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            fontSize: 12.5,
-            color: PRIMARY_DARK,
-            pl: 0,
-            minHeight: 0,
-          }}
-        >
-          Back to Requisitions
-        </Button>
-      </Box>
+      {/* ── Back ── */}
+      <Button
+        onClick={onBack}
+        startIcon={<ArrowBackRoundedIcon />}
+        sx={{
+          textTransform: "none",
+          fontWeight: 700,
+          fontSize: 14,
+          color: PRIMARY_DARK,
+          px: 1,
+          mb: 1.5,
+          ml: -1,
+          "&:hover": { bgcolor: PRIMARY_TINT },
+        }}
+      >
+        Back to jobs
+      </Button>
 
-      {/* Header — priority tab on the left, position id "stamped" top right */}
-      <Box sx={{ display: "flex", px: { xs: 2, sm: 3 }, pt: 1.5 }}>
+      {/* ── Hero ── */}
+      <Card sx={{ p: 0, overflow: "hidden", mb: 2 }}>
+        <Box sx={{ height: 6, background: `linear-gradient(90deg, ${PRIMARY_DARK}, ${PRIMARY}, #3E9A93)` }} />
         <Box
           sx={{
-            width: 4,
-            borderRadius: 3,
-            bgcolor: tab.fg,
-            mr: { xs: 1.5, sm: 2.25 },
-            flexShrink: 0,
+            p: { xs: 2.25, sm: 3 },
+            display: "flex",
+            gap: { xs: 1.75, sm: 2.5 },
+            alignItems: "flex-start",
+            flexDirection: { xs: "column", sm: "row" },
           }}
-        />
-
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        >
+          {/* Company initial */}
           <Box
             sx={{
+              width: { xs: 52, sm: 60 },
+              height: { xs: 52, sm: 60 },
+              borderRadius: "14px",
+              bgcolor: PRIMARY_TINT,
+              color: PRIMARY_DARK,
               display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 1.5,
-              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: FONT_DISPLAY,
+              fontWeight: 700,
+              fontSize: { xs: 22, sm: 26 },
+              flexShrink: 0,
+              border: `1px solid #BFDCD9`,
             }}
           >
-            <Box sx={{ minWidth: 0 }}>
+            {(company || job.job_title || "J").trim()[0].toUpperCase()}
+          </Box>
+
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
               <Typography
-                sx={{
-                  fontFamily: FONT_MONO,
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  color: tab.fg,
-                  textTransform: "uppercase",
-                  letterSpacing: 1.4,
-                }}
-              >
-                Requisition
-              </Typography>
-              <Typography
+                component="h1"
                 sx={{
                   fontFamily: FONT_DISPLAY,
                   fontWeight: 700,
-                  fontSize: { xs: 21, sm: 25 },
+                  fontSize: { xs: 22, sm: 27 },
                   color: INK,
                   lineHeight: 1.2,
-                  mt: 0.25,
+                  overflowWrap: "anywhere",
                 }}
               >
-                {job.job_title}
+                {job.job_title || "Job"}
               </Typography>
+              {applied && (
+                <Chip
+                  icon={<CheckCircleRoundedIcon sx={{ fontSize: 15 }} />}
+                  label="Applied"
+                  size="small"
+                  sx={{
+                    height: 24,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: PRIMARY_DARK,
+                    bgcolor: PRIMARY_TINT,
+                    border: `1px solid ${PRIMARY}`,
+                    "& .MuiChip-icon": { color: PRIMARY },
+                  }}
+                />
+              )}
             </Box>
 
-            {/* Position id, styled like a stamped record tag */}
-            {job.job_position_id && (
-            <Box
-              sx={{
-                fontFamily: FONT_MONO,
-                fontSize: 11.5,
-                fontWeight: 700,
-                color: tab.fg,
-                bgcolor: tab.bg,
-                border: `1px solid ${tab.fg}40`,
-                borderRadius: "6px",
-                px: 1.25,
-                py: 0.4,
-                letterSpacing: 0.4,
-                flexShrink: 0,
-              }}
-            >
-              {job.job_position_id}
+            {(company || industry) && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.75, flexWrap: "wrap" }}>
+                <BusinessRoundedIcon sx={{ fontSize: 17, color: PRIMARY }} />
+                {company && (
+                  <Typography sx={{ fontSize: 15, fontWeight: 700, color: PRIMARY_DARK }}>{company}</Typography>
+                )}
+                {industry && <Typography sx={{ fontSize: 13.5, color: MUTED }}>· {industry}</Typography>}
+              </Box>
+            )}
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.5, mt: 0.75 }}>
+              {location && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <PlaceOutlinedIcon sx={{ fontSize: 17, color: MUTED }} />
+                  <Typography sx={{ fontSize: 13.5, color: MUTED }}>{location}</Typography>
+                </Box>
+              )}
+              {job.job_position_id && (
+                <Typography sx={{ fontSize: 13, color: "#9CA3AF" }}>ID: {job.job_position_id}</Typography>
+              )}
             </Box>
-            )}
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 1.5 }}>
+              {jobType && <MetaChip label={jobType} />}
+              {mode && <MetaChip label={mode} />}
+              {experience && <MetaChip label={`${experience} experience`} />}
+              {openings && <MetaChip label={`${openings} opening${openings === 1 ? "" : "s"}`} />}
+            </Box>
           </Box>
 
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: 0.75,
-              mt: 1,
-              flexWrap: "wrap",
-            }}
-          >
-            {job.organisation?.organisation_name && (
-              <Typography
-                sx={{ fontSize: 14.5, fontWeight: 700, color: PRIMARY_DARK }}
-              >
-                {job.organisation.organisation_name}
+          {/* Apply — desktop / tablet */}
+          <Box sx={{ display: { xs: "none", sm: "block" }, flexShrink: 0 }}>
+            <ApplyButton />
+            {left !== null && left >= 0 && left <= 7 && !applied && (
+              <Typography sx={{ fontSize: 12, color: AMBER, mt: 0.75, textAlign: "center", fontWeight: 600 }}>
+                {left === 0 ? "Closes today" : `Closes in ${left} day${left === 1 ? "" : "s"}`}
               </Typography>
-            )}
-            {job.organisation?.industry && (
-              <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED }}>
-                · {job.organisation.industry}
-              </Typography>
-            )}
-          </Box>
-
-          <Box
-            sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.5 }}
-          >
-            <PlaceRoundedIcon sx={{ fontSize: 15, color: TEXT_MUTED }} />
-            <Typography sx={{ fontSize: 12.5, color: TEXT_MUTED }}>
-              {location}
-            </Typography>
-          </Box>
-
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 1.5 }}>
-            {job.job_type && (
-              <Chip
-                label={job.job_type}
-                size="small"
-                sx={{
-                  height: 23,
-                  fontSize: 11,
-                  bgcolor: "#fff",
-                  border: `1px solid ${BORDER}`,
-                  color: INK,
-                }}
-              />
-            )}
-            {job.mode_of_work && (
-              <Chip
-                label={job.mode_of_work}
-                size="small"
-                sx={{
-                  height: 23,
-                  fontSize: 11,
-                  bgcolor: "#fff",
-                  border: `1px solid ${BORDER}`,
-                  color: INK,
-                }}
-              />
-            )}
-            {(job.min_years || job.max_years) && (
-              <Chip
-                label={`${job.min_years ?? 0}–${job.max_years ?? "?"} yrs experience`}
-                size="small"
-                sx={{
-                  height: 23,
-                  fontSize: 11,
-                  bgcolor: "#fff",
-                  border: `1px solid ${BORDER}`,
-                  color: INK,
-                }}
-              />
             )}
           </Box>
         </Box>
-      </Box>
+      </Card>
 
-      <Divider
-        sx={{
-          borderColor: BORDER,
-          borderStyle: "dashed",
-          my: 2.5,
-          mx: { xs: 2, sm: 3 },
-        }}
-      />
-
-      {/* Body: content + record sheet */}
+      {/* ── Body: content + overview ── */}
       <Box
         sx={{
-          px: { xs: 2, sm: 3 },
-          pb: { xs: 2, sm: 3 },
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1fr 260px" },
-          gap: { xs: 2.5, md: 3 },
+          gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 320px" },
+          gap: 2,
           alignItems: "start",
         }}
       >
-        {/* Left: description + requirement rails */}
-        <Box sx={{ minWidth: 0 }}>
-          <Box sx={{ mb: 3 }}>
+        {/* Left */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <Card>
+            <CardTitle icon={DescriptionOutlinedIcon}>About the role</CardTitle>
             <Typography
               sx={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: TEXT_MUTED,
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-                mb: 1,
+                fontSize: { xs: 14, sm: 15 },
+                color: "#374151",
+                lineHeight: 1.75,
+                whiteSpace: "pre-line",
+                overflowWrap: "anywhere",
               }}
             >
-              About the Role
-            </Typography>
-            <Typography sx={{ fontSize: 13.5, color: INK, lineHeight: 1.75 }}>
               {description}
             </Typography>
-          </Box>
+          </Card>
 
-          {hasSkills && (
-          <Box
-            sx={{
-              background: "#fff",
-              border: `1px solid ${BORDER}`,
-              borderRadius: "10px",
-              p: { xs: 2, sm: 2.5 },
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: TEXT_MUTED,
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-                mb: 2,
-              }}
-            >
-              Skills &amp; Requirements
-            </Typography>
-            <RequirementRail
-              title="Mandatory"
-              items={job.mandatory}
-              tone="mandatory"
-            />
-            <RequirementRail
-              title="Primary"
-              items={job.primary}
-              tone="primary"
-            />
-            <RequirementRail
-              title="Secondary"
-              items={job.secondary}
-              tone="default"
-            />
-            <RequirementRail
-              title="Programming Skills"
-              items={job.programming_skills}
-              tone="default"
-            />
-          </Box>
-          )}
+          {hasSkills ? (
+            <Card>
+              <CardTitle icon={PsychologyOutlinedIcon}>Skills & requirements</CardTitle>
+              <SkillGroup title="Must have" items={must} tone="must" />
+              <SkillGroup title="Primary skills" items={primary} tone="primary" />
+              <SkillGroup title="Good to have" items={secondary} tone="nice" />
+              <SkillGroup title="Tools & programming" items={tools} tone="nice" />
+            </Card>
+          ) : null}
         </Box>
 
-        {/* Right: record sheet (sticky on desktop) */}
-        <Box
-          sx={{
-            display: { xs: "none", md: "block" },
-            position: "sticky",
-            top: 16,
-          }}
-        >
-          <Box
-            sx={{
-              background: "#fff",
-              border: `1px solid ${BORDER}`,
-              borderRadius: "10px",
-              overflow: "hidden",
-            }}
-          >
-            <Box sx={{ bgcolor: INK, px: 2, py: 1 }}>
-              <Typography
-                sx={{
-                  fontFamily: FONT_MONO,
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  color: "#fff",
-                  textTransform: "uppercase",
-                  letterSpacing: 1.2,
-                }}
-              >
-                Record
-              </Typography>
-            </Box>
-            <Box sx={{ px: 2, py: 0.5 }}>
-              <RecordField
-                label="Closes"
-                value={formatDate(job.closing_date)}
-              />
-              <RecordField
-                label="Openings"
-                value={job.no_of_positions || "—"}
-              />
-              <RecordField label="Priority" value={job.priority || "—"} />
-              {job.grade_or_level && (
-                <RecordField label="Grade" value={job.grade_or_level} />
-              )}
-              {hasSalary && (
-                <RecordField
-                  label="Salary"
-                  value={`${job.salary_range_min || "—"}–${job.salary_range_max || "—"} ${job.salary_unit || ""}`}
+        {/* Right — job overview (sticky on desktop) */}
+        <Box sx={{ position: { md: "sticky" }, top: { md: 88 }, minWidth: 0 }}>
+          <Card sx={{ p: { xs: 2.25, sm: 2.5 } }}>
+            <Typography sx={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16.5, color: INK, mb: 0.5 }}>
+              Job overview
+            </Typography>
+
+            {closes && (
+              <OverviewRow icon={EventOutlinedIcon} label="Closes">
+                {closes}
+              </OverviewRow>
+            )}
+            {openings && (
+              <OverviewRow icon={GroupsOutlinedIcon} label="Openings">
+                {openings}
+              </OverviewRow>
+            )}
+            {experience && (
+              <OverviewRow icon={WorkHistoryOutlinedIcon} label="Experience">
+                {experience}
+              </OverviewRow>
+            )}
+            {salary && (
+              <OverviewRow icon={PaymentsOutlinedIcon} label="Salary">
+                {salary}
+              </OverviewRow>
+            )}
+            {grade && (
+              <OverviewRow icon={MilitaryTechOutlinedIcon} label="Grade">
+                {grade}
+              </OverviewRow>
+            )}
+            {workAuth && (
+              <OverviewRow icon={VerifiedUserOutlinedIcon} label="Work auth">
+                {workAuth}
+              </OverviewRow>
+            )}
+            {priority && pTone && (
+              <OverviewRow icon={FlagOutlinedIcon} label="Priority">
+                <Chip
+                  label={priority}
+                  size="small"
+                  sx={{ height: 22, fontSize: 11.5, fontWeight: 700, color: pTone.fg, bgcolor: pTone.bg, textTransform: "capitalize" }}
                 />
-              )}
-              {job.workAuthorization && (
-                <RecordField label="Work Auth" value={job.workAuthorization} />
-              )}
-            </Box>
-            <Box sx={{ p: 2, pt: 1 }}>
+              </OverviewRow>
+            )}
+
+            <Box sx={{ mt: 1.5 }}>
               <ApplyButton fullWidth />
               {locked && !applied && lockReason && (
-                <Typography sx={{ fontSize: 12, color: AMBER, mt: 1, lineHeight: 1.5 }}>
-                  {lockReason}
-                </Typography>
+                <Typography sx={{ fontSize: 12, color: AMBER, mt: 1, lineHeight: 1.5 }}>{lockReason}</Typography>
               )}
             </Box>
-          </Box>
+          </Card>
         </Box>
       </Box>
 
-      {/* Fixed apply bar — mobile / tablet only */}
+      {/* ── Phone: sticky apply bar ── */}
       <Box
         sx={{
-          display: { xs: "flex", md: "none" },
+          display: { xs: "flex", sm: "none" },
           position: "fixed",
-          bottom: 0,
           left: 0,
           right: 0,
+          bottom: 0,
+          zIndex: 1200,
           alignItems: "center",
           justifyContent: "space-between",
           gap: 1.5,
           px: 2,
           py: 1.25,
-          background: "#fff",
+          pb: "calc(10px + env(safe-area-inset-bottom))",
+          bgcolor: "#fff",
           borderTop: `1px solid ${BORDER}`,
           boxShadow: "0 -6px 18px rgba(31,41,55,0.08)",
-          zIndex: 10,
         }}
       >
-        <Typography
-          sx={{
-            fontFamily: FONT_MONO,
-            fontSize: 11,
-            color: TEXT_MUTED,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {job.closing_date ? `Closes ${formatDate(job.closing_date)}` : ""}
+        <Typography sx={{ fontSize: 12.5, color: MUTED, minWidth: 0 }}>
+          {closes ? `Closes ${closes}` : ""}
         </Typography>
         <ApplyButton />
       </Box>

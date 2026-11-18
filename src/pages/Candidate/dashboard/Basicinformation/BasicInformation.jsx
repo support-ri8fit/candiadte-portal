@@ -1053,7 +1053,7 @@ function BasicInformation({ candidateInfo, completeDetailsApi }) {
           <Box display="flex" justifyContent="center" mt={1} mb={2}>
             <Avatar
               sx={{ width: 120, height: 120, border: `2px solid ${palette.teal}` }}
-              src={basicInfo.profile_picture || "path/to/default-image.png"}
+              src={basicInfo.profile_picture || undefined}
               alt={basicInfo.full_name}
             />
           </Box>
